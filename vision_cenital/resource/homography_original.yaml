@@ -11,6 +11,6 @@ H:
 
 # Dimensiones de la pista en centímetros y escala de píxeles por centímetro
 # Esto toca cambiarlo si la pista es de otro tamaño o si se quiere una resolución diferente en la imagen transformada.
-pista_h_cm: 408
-pista_w_cm: 206
+pista_h_cm: 206
+pista_w_cm: 408
 px_per_cm: 10

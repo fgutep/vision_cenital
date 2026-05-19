@@ -1,3 +1,12 @@
 {
-    "ros.distro": "jazzy"
+    "ros.distro": "jazzy",
+    "ROS2.distro": "jazzy",
+    "python.autoComplete.extraPaths": [
+        "/home/felipe/Documents/labsRobotica/lab1/ros2_ws/install/teleop_control_pkg/lib/python3.12/site-packages",
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/felipe/Documents/labsRobotica/lab1/ros2_ws/install/teleop_control_pkg/lib/python3.12/site-packages",
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ]
 }

@@ -11,8 +11,8 @@ import os
 
 # ─── CONFIGURACIÓN DE LA PISTA (Ajusta a tus medidas reales en cm) ───
 # Por ejemplo, si tu cuadrícula de papel mide 17.5cm x 25cm (7x10 esquinas)
-REAL_W_CM = 17.5 
-REAL_H_CM = 25.0
+REAL_W_CM = 408.0 
+REAL_H_CM = 206.0
 
 REAL_CORNERS_CM = np.float32([
     [0, 0],           # SUP-IZQ

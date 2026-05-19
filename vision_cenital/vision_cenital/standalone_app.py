@@ -165,7 +165,7 @@ class StandaloneMonitor:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Módulo de Auditoría de Planificación de CargaBot")
     parser.add_argument('--params', type=str, default='resource/camera_params.yaml')
-    parser.add_argument('--homography', type=str, default='resource/homography.yaml')
+    parser.add_argument('--homography', type=str, default='resource/homography_retry.yaml')
     parser.add_argument('--image', type=str, default='', help="Ruta a una imagen estática de pruebas offline")
     parser.add_argument('--grid-res', type=float, default=5.0, help="Tamaño métrico de celda en cm")
     parser.add_argument('--robot-radius', type=float, default=15.0, help="Radio de seguridad en cm")
