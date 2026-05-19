@@ -24,6 +24,7 @@ setup(
         'console_scripts': [
             # Expone tu nodo principal al comando 'ros2 run'
             'coordinator_node = vision_cenital.overhead_coordinator_node:main',
+            'virtual_cargabot_node = vision_cenital.virtual_cargabot_node:main',
         ],
     },
 )

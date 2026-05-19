@@ -1,0 +1,27 @@
+running develop
+running egg_info
+creating vision_cenital.egg-info
+writing vision_cenital.egg-info/PKG-INFO
+writing dependency_links to vision_cenital.egg-info/dependency_links.txt
+writing entry points to vision_cenital.egg-info/entry_points.txt
+writing requirements to vision_cenital.egg-info/requires.txt
+writing top-level names to vision_cenital.egg-info/top_level.txt
+writing manifest file 'vision_cenital.egg-info/SOURCES.txt'
+reading manifest file 'vision_cenital.egg-info/SOURCES.txt'
+writing manifest file 'vision_cenital.egg-info/SOURCES.txt'
+running build_ext
+Creating /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages/vision-cenital.egg-link (link to .)
+Installing coordinator_node script to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/vision_cenital
+Installing virtual_cargabot_node script to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/vision_cenital
+
+Installed /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital
+running symlink_data
+creating /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/share/ament_index
+creating /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/share/ament_index/resource_index
+creating /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/share/ament_index/resource_index/packages
+symbolically linking /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/resource/vision_cenital -> /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/share/ament_index/resource_index/packages
+symbolically linking /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/package.xml -> /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/share/vision_cenital
+creating /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/share/vision_cenital/resource
+symbolically linking /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/resource/homography_original.yaml -> /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/share/vision_cenital/resource
+symbolically linking /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/resource/camera_params.yaml -> /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/share/vision_cenital/resource
+symbolically linking /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/resource/homography_retry.yaml -> /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/share/vision_cenital/resource

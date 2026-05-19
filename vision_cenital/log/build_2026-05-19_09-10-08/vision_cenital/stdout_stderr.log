@@ -1,0 +1,32 @@
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/colcon_core/executor/__init__.py", line 91, in __call__
+    rc = await self.task(*args, **kwargs)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/colcon_core/task/__init__.py", line 93, in __call__
+    return await task_method(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/colcon_ros/task/ament_python/build.py", line 51, in build
+    setup_py_data = get_setup_data(self.context.pkg, env)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/colcon_core/task/python/__init__.py", line 20, in get_setup_data
+    return dict(pkg.metadata[key](env))
+                ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/colcon_ros/package_augmentation/ros_ament_python.py", line 57, in getter
+    return get_setup_information(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/colcon_python_setup_py/package_identification/python_setup_py.py", line 249, in get_setup_information
+    _setup_information_cache[hashable_env] = _get_setup_information(
+                                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/colcon_python_setup_py/package_identification/python_setup_py.py", line 301, in _get_setup_information
+    return ast.literal_eval(output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ast.py", line 66, in literal_eval
+    node_or_string = parse(node_or_string.lstrip(" \t"), mode='eval')
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/ast.py", line 52, in parse
+    return compile(source, filename, mode, flags,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<unknown>", line 1
+    {'package_data': {}, 'dist_files': [], 'src_root': None, 'dependency_links': [], 'setup_requires': [], 'cffi_modules': None, 'message_extractors': None, 'eager_resources': None, 'entry_points': {'console_scripts': ['coordinator_node = vision_cenital.overhead_coordinator_node:main', 'virtual_cargabot_node = vision_cenital.virtual_cargabot_node:main']}, 'exclude_package_data': None, 'extras_require': {}, 'include_package_data': True, 'install_requires': ['numpy<2', 'opencv-python>=4.11.0.86', 'pyyaml'], 'namespace_packages': None, 'packages': ['vision_cenital'], 'python_requires': <SpecifierSet('>=3.10')>, 'test_loader': None, 'test_runner': None, 'test_suite': None, 'tests_require': ['pytest'], 'use_2to3': None, 'zip_safe': True, 'verbose': 1, 'dry_run': 0, 'help': 0, 'command_packages': None, 'script_name': 'setup.py', 'script_args': ['--dry-run'], 'command_options': {'develop': {'script_dir': ('setup.cfg', '$base/lib/vision_cenital')}, 'install': {'install_scripts': ('setup.cfg', '$base/lib/vision_cenital')}}, 'package_dir': {}, 'py_modules': None, 'libraries': None, 'headers': None, 'ext_package': None, 'include_dirs': None, 'extra_path': None, 'scripts': None, 'data_files': [('share/ament_index/resource_index/packages', ['resource/vision_cenital']), ('share/vision_cenital', ['package.xml']), ('share/vision_cenital/resource', ['resource/homography_original.yaml', 'resource/camera_params.yaml', 'resource/homography_retry.yaml'])], 'password': '', 'command_obj': {}, 'have_run': {}, 'want_user_cfg': True, 'metadata': {'name': 'vision-cenital', 'version': '0.1.0', 'author': None, 'author_email': None, 'maintainer': 'Felipe', 'maintainer_email': None, 'url': None, 'license': 'Apache-2.0', 'description': 'Visión cenital y control para CargaBot', 'long_description': '# Arquitectura del Sistema de Visión Cenital — CargaBot\n\nEste submódulo provee capacidades de localización global, mapeo de obstáculos y planificación de trayectorias en tiempo real utilizando una cámara HD cenital fija.\n\n## Flujo de Nodos y Tópicos ROS 2\n\nEl sistema expone el nodo principal `overhead_coordinator_node` que orquesta la ejecución del pipeline:\n\n- **Subscripciones:**\n  - `/cargabot/goal_pose` (`geometry_msgs/msg/PoseStamped`): Destino ordenado por el operador o planificadores de alto nivel.\n- **Publicaciones:**\n  - `/cargabot/global_path` (`nav_msgs/msg/Path`): Camino métrico absoluto visualizable nativamente en RViz2.\n  - `/cargabot/cmd_goto` (`geometry_msgs/msg/PoseStamped`): Coordenada incremental de avance (Lookahead) calculada con heurística de tolerancia a desviación.\n  - `/cargabot/overhead_debug_video` (`sensor_msgs/msg/Image`): Previsualización de depuración con superposiciones de datos espaciales.\n\n## Ciclo de Vida del Frame\n1. **Captura:** Inyección VA-API de video comprimido H.264 por hardware a 1280x720 nativos.\n2. **Corrección Proyectiva:** Eliminación de distorsión radial y proyección métrica de la pista completa.\n3. **Mapeo:** Extracción de capas semánticas (Obstáculos + Cubos RGB) e inyección en matriz dispersa de costos de 5 cm x 5 cm.\n4. **Búsqueda:** Bucle A* sobre la grilla de espacio libre.', 'keywords': None, 'platforms': None, 'classifiers': None, 'download_url': None, 'provides': None, 'requires': None, 'obsoletes': None, 'long_description_content_type': 'text/markdown', 'project_urls': {}, 'license_file': None, 'python_requires': <SpecifierSet('>=3.10')>}}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              ^
+SyntaxError: invalid syntax

@@ -1,0 +1,20 @@
+[0.930s] Invoking command in '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/build --no-deps symlink_data
+[1.147s] running develop
+[1.263s] /usr/lib/python3/dist-packages/setuptools/command/easy_install.py:363: UserWarning: Unbuilt egg for pytest-repeat [unknown version] (/usr/lib/python3/dist-packages)
+[1.263s]   self.local_index = Environment(self.shadow_path + sys.path)
+[1.291s] running egg_info
+[1.306s] writing vision_cenital.egg-info/PKG-INFO
+[1.306s] writing dependency_links to vision_cenital.egg-info/dependency_links.txt
+[1.306s] writing entry points to vision_cenital.egg-info/entry_points.txt
+[1.306s] writing requirements to vision_cenital.egg-info/requires.txt
+[1.307s] writing top-level names to vision_cenital.egg-info/top_level.txt
+[1.340s] reading manifest file 'vision_cenital.egg-info/SOURCES.txt'
+[1.341s] writing manifest file 'vision_cenital.egg-info/SOURCES.txt'
+[1.362s] running build_ext
+[1.362s] Creating /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages/vision-cenital.egg-link (link to .)
+[1.363s] Installing coordinator_node script to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/vision_cenital
+[1.363s] Installing virtual_cargabot_node script to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/vision_cenital
+[1.363s] 
+[1.363s] Installed /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital
+[1.363s] running symlink_data
+[1.389s] Invoked command in '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/build --no-deps symlink_data

@@ -1,16 +1,8 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "vision-cenital"
 version = "0.1.0"
-description = "Visión cenital y control para CargaBot"
-readme = "ARCHITECTURE.md"
-requires-python = ">=3.10"
-dependencies = [
-    "numpy<2",
-    "opencv-python>=4.11.0.86",
-    "pyyaml",
-]
-
-[build-system]
-# Forzamos a uv a usar el mismo motor que lee tu setup.py de ROS 2
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+dynamic = ["dependencies"]

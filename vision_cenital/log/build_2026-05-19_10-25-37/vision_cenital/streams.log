@@ -1,0 +1,149 @@
+[2.599s] Invoking command in '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base build/vision_cenital build --build-base /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/build install --record /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/install.log --single-version-externally-managed install_data
+[3.048s] /usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `description` defined outside of `pyproject.toml` would be ignored.
+[3.049s] !!
+[3.049s] 
+[3.049s]         ********************************************************************************
+[3.049s]         ##########################################################################
+[3.049s]         # configuration would be ignored/result in error due to `pyproject.toml` #
+[3.049s]         ##########################################################################
+[3.049s] 
+[3.049s]         The following seems to be defined outside of `pyproject.toml`:
+[3.050s] 
+[3.050s]         `description = 'Visión cenital y control para CargaBot'`
+[3.050s] 
+[3.050s]         According to the spec (see the link below), however, setuptools CANNOT
+[3.050s]         consider this value unless `description` is listed as `dynamic`.
+[3.050s] 
+[3.050s]         https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+[3.050s] 
+[3.051s]         For the time being, `setuptools` will still consider the given value (as a
+[3.051s]         **transitional** measure), but please note that future releases of setuptools will
+[3.051s]         follow strictly the standard.
+[3.051s] 
+[3.051s]         To prevent this warning, you can list `description` under `dynamic` or alternatively
+[3.051s]         remove the `[project]` table from your file and rely entirely on other means of
+[3.051s]         configuration.
+[3.051s] 
+[3.052s]         This deprecation is overdue, please update your project and remove deprecated
+[3.052s]         calls to avoid build errors in the future.
+[3.052s]         ********************************************************************************
+[3.052s] 
+[3.052s] !!
+[3.052s]   _handle_missing_dynamic(dist, project_table)
+[3.052s] /usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `license` defined outside of `pyproject.toml` would be ignored.
+[3.053s] !!
+[3.053s] 
+[3.053s]         ********************************************************************************
+[3.053s]         ##########################################################################
+[3.053s]         # configuration would be ignored/result in error due to `pyproject.toml` #
+[3.053s]         ##########################################################################
+[3.053s] 
+[3.053s]         The following seems to be defined outside of `pyproject.toml`:
+[3.053s] 
+[3.054s]         `license = 'Apache-2.0'`
+[3.054s] 
+[3.054s]         According to the spec (see the link below), however, setuptools CANNOT
+[3.054s]         consider this value unless `license` is listed as `dynamic`.
+[3.054s] 
+[3.054s]         https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+[3.054s] 
+[3.054s]         For the time being, `setuptools` will still consider the given value (as a
+[3.054s]         **transitional** measure), but please note that future releases of setuptools will
+[3.055s]         follow strictly the standard.
+[3.055s] 
+[3.055s]         To prevent this warning, you can list `license` under `dynamic` or alternatively
+[3.055s]         remove the `[project]` table from your file and rely entirely on other means of
+[3.055s]         configuration.
+[3.055s] 
+[3.055s]         This deprecation is overdue, please update your project and remove deprecated
+[3.055s]         calls to avoid build errors in the future.
+[3.055s]         ********************************************************************************
+[3.056s] 
+[3.056s] !!
+[3.056s]   _handle_missing_dynamic(dist, project_table)
+[3.056s] /usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `maintainers` defined outside of `pyproject.toml` would be ignored.
+[3.056s] !!
+[3.056s] 
+[3.056s]         ********************************************************************************
+[3.056s]         ##########################################################################
+[3.057s]         # configuration would be ignored/result in error due to `pyproject.toml` #
+[3.057s]         ##########################################################################
+[3.057s] 
+[3.057s]         The following seems to be defined outside of `pyproject.toml`:
+[3.057s] 
+[3.057s]         `maintainers = 'Felipe'`
+[3.057s] 
+[3.058s]         According to the spec (see the link below), however, setuptools CANNOT
+[3.058s]         consider this value unless `maintainers` is listed as `dynamic`.
+[3.058s] 
+[3.058s]         https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+[3.058s] 
+[3.058s]         For the time being, `setuptools` will still consider the given value (as a
+[3.058s]         **transitional** measure), but please note that future releases of setuptools will
+[3.058s]         follow strictly the standard.
+[3.059s] 
+[3.059s]         To prevent this warning, you can list `maintainers` under `dynamic` or alternatively
+[3.059s]         remove the `[project]` table from your file and rely entirely on other means of
+[3.059s]         configuration.
+[3.059s] 
+[3.060s]         This deprecation is overdue, please update your project and remove deprecated
+[3.060s]         calls to avoid build errors in the future.
+[3.060s]         ********************************************************************************
+[3.060s] 
+[3.061s] !!
+[3.061s]   _handle_missing_dynamic(dist, project_table)
+[3.061s] /usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `scripts` defined outside of `pyproject.toml` would be ignored.
+[3.061s] !!
+[3.061s] 
+[3.061s]         ********************************************************************************
+[3.061s]         ##########################################################################
+[3.061s]         # configuration would be ignored/result in error due to `pyproject.toml` #
+[3.062s]         ##########################################################################
+[3.062s] 
+[3.062s]         The following seems to be defined outside of `pyproject.toml`:
+[3.062s] 
+[3.062s]         `scripts = ['coordinator_node = vision_cenital.overhead_coordinator_node:main', 'virtual_cargabot_node = vision_cenital.virtual_cargabot_node:main']`
+[3.062s] 
+[3.062s]         According to the spec (see the link below), however, setuptools CANNOT
+[3.062s]         consider this value unless `scripts` is listed as `dynamic`.
+[3.062s] 
+[3.063s]         https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+[3.063s] 
+[3.063s]         For the time being, `setuptools` will still consider the given value (as a
+[3.063s]         **transitional** measure), but please note that future releases of setuptools will
+[3.063s]         follow strictly the standard.
+[3.063s] 
+[3.064s]         To prevent this warning, you can list `scripts` under `dynamic` or alternatively
+[3.064s]         remove the `[project]` table from your file and rely entirely on other means of
+[3.064s]         configuration.
+[3.064s] 
+[3.064s]         This deprecation is overdue, please update your project and remove deprecated
+[3.064s]         calls to avoid build errors in the future.
+[3.064s]         ********************************************************************************
+[3.064s] 
+[3.065s] !!
+[3.065s]   _handle_missing_dynamic(dist, project_table)
+[3.665s] running egg_info
+[3.712s] writing build/vision_cenital/vision_cenital.egg-info/PKG-INFO
+[3.713s] writing dependency_links to build/vision_cenital/vision_cenital.egg-info/dependency_links.txt
+[3.713s] writing entry points to build/vision_cenital/vision_cenital.egg-info/entry_points.txt
+[3.713s] writing requirements to build/vision_cenital/vision_cenital.egg-info/requires.txt
+[3.714s] writing top-level names to build/vision_cenital/vision_cenital.egg-info/top_level.txt
+[3.806s] reading manifest file 'build/vision_cenital/vision_cenital.egg-info/SOURCES.txt'
+[3.808s] writing manifest file 'build/vision_cenital/vision_cenital.egg-info/SOURCES.txt'
+[3.808s] running build
+[3.808s] running build_py
+[3.809s] copying vision_cenital/overhead_coordinator_node.py -> /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/build/lib/vision_cenital
+[3.810s] running install
+[3.820s] running install_lib
+[3.865s] copying /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/build/lib/vision_cenital/overhead_coordinator_node.py -> /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages/vision_cenital
+[3.867s] byte-compiling /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages/vision_cenital/overhead_coordinator_node.py to overhead_coordinator_node.cpython-312.pyc
+[3.872s] running install_data
+[3.873s] running install_egg_info
+[3.916s] removing '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages/vision_cenital-0.1.0-py3.12.egg-info' (and everything under it)
+[3.917s] Copying build/vision_cenital/vision_cenital.egg-info to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages/vision_cenital-0.1.0-py3.12.egg-info
+[3.919s] running install_scripts
+[4.019s] Installing coordinator_node script to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/vision_cenital
+[4.019s] Installing virtual_cargabot_node script to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/vision_cenital
+[4.020s] writing list of installed files to '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/install.log'
+[4.094s] Invoked command in '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base build/vision_cenital build --build-base /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/build install --record /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/install.log --single-version-externally-managed install_data

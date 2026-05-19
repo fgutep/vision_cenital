@@ -1,0 +1,193 @@
+[0.000000] (-) TimerEvent: {}
+[0.000320] (vision_cenital) JobQueued: {'identifier': 'vision_cenital', 'dependencies': OrderedDict()}
+[0.001662] (vision_cenital) JobStarted: {'identifier': 'vision_cenital'}
+[0.099401] (-) TimerEvent: {}
+[0.199892] (-) TimerEvent: {}
+[0.300379] (-) TimerEvent: {}
+[0.400859] (-) TimerEvent: {}
+[0.501366] (-) TimerEvent: {}
+[0.601836] (-) TimerEvent: {}
+[0.702389] (-) TimerEvent: {}
+[0.802844] (-) TimerEvent: {}
+[0.903237] (-) TimerEvent: {}
+[1.003658] (-) TimerEvent: {}
+[1.104062] (-) TimerEvent: {}
+[1.204469] (-) TimerEvent: {}
+[1.304857] (-) TimerEvent: {}
+[1.405243] (-) TimerEvent: {}
+[1.505711] (-) TimerEvent: {}
+[1.606089] (-) TimerEvent: {}
+[1.706488] (-) TimerEvent: {}
+[1.806865] (-) TimerEvent: {}
+[1.907236] (-) TimerEvent: {}
+[2.007641] (-) TimerEvent: {}
+[2.108016] (-) TimerEvent: {}
+[2.208359] (-) TimerEvent: {}
+[2.308733] (-) TimerEvent: {}
+[2.409117] (-) TimerEvent: {}
+[2.509527] (-) TimerEvent: {}
+[2.512848] (vision_cenital) Command: {'cmd': ['/usr/bin/python3', '-W', 'ignore:setup.py install is deprecated', '-W', 'ignore:easy_install command is deprecated', 'setup.py', 'egg_info', '--egg-base', 'build/vision_cenital', 'build', '--build-base', '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/build', 'install', '--record', '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/install.log', '--single-version-externally-managed', 'install_data'], 'cwd': '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital', 'env': {'GJS_DEBUG_TOPICS': 'JS ERROR;JS LOG', 'LESSOPEN': '| /usr/bin/lesspipe %s', '__EGL_VENDOR_LIBRARY_DIRS': '/etc/glvnd/egl_vendor.d:/usr/share/glvnd/egl_vendor.d', 'GHOSTTY_RESOURCES_DIR': '/snap/ghostty/current/share/ghostty', 'USER': 'felipe', 'GZ_CONFIG_PATH': '/opt/ros/jazzy/opt/sdformat_vendor/share/gz', 'XDG_SESSION_TYPE': 'wayland', 'XDG_CACHE_HOME': '/home/felipe/.cache', 'CLUTTER_DISABLE_MIPMAPPED_TEXT': '1', 'SHLVL': '1', 'LD_LIBRARY_PATH': '/home/felipe/Desktop/Robotica_Proy/CargaBot/ROS2_Software/ros2_ws/install/lab1_msgs/lib:/opt/ros/jazzy/opt/sdformat_vendor/lib:/opt/ros/jazzy/opt/rviz_ogre_vendor/lib:/opt/ros/jazzy/lib/x86_64-linux-gnu:/opt/ros/jazzy/opt/gz_math_vendor/lib:/opt/ros/jazzy/opt/gz_utils_vendor/lib:/opt/ros/jazzy/opt/gz_tools_vendor/lib:/opt/ros/jazzy/opt/gz_cmake_vendor/lib:/opt/ros/jazzy/lib:', 'HOME': '/home/felipe', 'TERMINFO': '/snap/ghostty/current/share/terminfo', 'TERM_PROGRAM_VERSION': '1.3.1', 'DESKTOP_SESSION': 'ubuntu', 'GNOME_SHELL_SESSION_MODE': 'ubuntu', 'HOMEBREW_PREFIX': '/home/linuxbrew/.linuxbrew', 'GTK_MODULES': 'gail:atk-bridge', 'MANAGERPID': '2847', 'SYSTEMD_EXEC_PID': '3143', 'GSM_SKIP_SSH_AGENT_WORKAROUND': 'true', 'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1000/bus', 'COLORTERM': 'truecolor', 'DEBUGINFOD_URLS': 'https://debuginfod.ubuntu.com', 'IM_CONFIG_PHASE': '1', 'WAYLAND_DISPLAY': 'wayland-0', 'COLCON_PREFIX_PATH': '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install:/home/felipe/Desktop/Robotica_Proy/CargaBot/ROS2_Software/ros2_ws/install:/home/felipe/ros2_ws/install', 'INFOPATH': '/home/linuxbrew/.linuxbrew/share/info:', 'LOGNAME': 'felipe', 'QT_AUTO_SCREEN_SCALE_FACTOR': '0', '_': '/usr/bin/colcon', 'MEMORY_PRESSURE_WATCH': '/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/session.slice/org.gnome.Shell@wayland.service/memory.pressure', 'XDG_SESSION_CLASS': 'user', 'USERNAME': 'felipe', 'TERM': 'xterm-ghostty', 'GNOME_DESKTOP_SESSION_ID': 'this-is-deprecated', 'PATH': '/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/lib/jvm/java-21-openjdk-amd64/bin:/opt/ros/jazzy/opt/gz_tools_vendor/bin:/opt/ros/jazzy/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/felipe/.local/share/../bin:/home/felipe/.cargo/bin:/home/felipe/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:/snap/ghostty/718/bin', 'SESSION_MANAGER': 'local/Absolute-Powehouse-P14:@/tmp/.ICE-unix/3098,unix/Absolute-Powehouse-P14:/tmp/.ICE-unix/3098', 'HOMEBREW_CELLAR': '/home/linuxbrew/.linuxbrew/Cellar', 'XDG_MENU_PREFIX': 'gnome-', 'GNOME_SETUP_DISPLAY': ':1', 'XDG_RUNTIME_DIR': '/run/user/1000', 'DISPLAY': ':0', 'GHOSTTY_SHELL_FEATURES': 'cursor:blink,path,sudo,title', 'LANG': 'en_US.UTF-8', 'XDG_CURRENT_DESKTOP': 'ubuntu:GNOME', 'XDG_DATA_HOME': '/home/felipe/.local/share', 'XDG_CONFIG_HOME': '/home/felipe/.config', 'XMODIFIERS': '@im=ibus', 'XDG_SESSION_DESKTOP': 'ubuntu', 'XAUTHORITY': '/run/user/1000/.mutter-Xwaylandauth.NCKEP3', 'LS_COLORS': 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=00:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.avif=01;35:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:*~=00;90:*#=00;90:*.bak=00;90:*.crdownload=00;90:*.dpkg-dist=00;90:*.dpkg-new=00;90:*.dpkg-old=00;90:*.dpkg-tmp=00;90:*.old=00;90:*.orig=00;90:*.part=00;90:*.rej=00;90:*.rpmnew=00;90:*.rpmorig=00;90:*.rpmsave=00;90:*.swp=00;90:*.tmp=00;90:*.ucf-dist=00;90:*.ucf-new=00;90:*.ucf-old=00;90:', 'TERM_PROGRAM': 'ghostty', 'SSH_AUTH_SOCK': '/run/user/1000/keyring/ssh', 'AMENT_PREFIX_PATH': '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital:/home/felipe/Desktop/Robotica_Proy/CargaBot/ROS2_Software/ros2_ws/install/lab1_py_pkg:/home/felipe/Desktop/Robotica_Proy/CargaBot/ROS2_Software/ros2_ws/install/lab1_msgs:/home/felipe/ros2_ws/install/rplidar_ros:/opt/ros/jazzy', 'SHELL': '/bin/bash', 'GHOSTTY_BIN_DIR': '/snap/ghostty/718/bin', 'QT_ACCESSIBILITY': '1', 'GDMSESSION': 'ubuntu', 'LESSCLOSE': '/usr/bin/lesspipe %s %s', 'GDK_PIXBUF_MODULE_FILE': '/home/felipe/snap/ghostty/common/.cache/gdk-pixbuf-loaders.cache', 'GJS_DEBUG_OUTPUT': 'stderr', 'QT_IM_MODULE': 'ibus', 'JAVA_HOME': '/usr/lib/jvm/java-21-openjdk-amd64', 'PWD': '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital', 'LC_ALL': 'C.UTF-8', 'XDG_CONFIG_DIRS': '/etc/xdg/xdg-ubuntu:/etc/xdg', 'XDG_DATA_DIRS': '/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop', 'PYTHONPATH': '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages:/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital:/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages:/home/felipe/Desktop/Robotica_Proy/CargaBot/ROS2_Software/ros2_ws/install/lab1_py_pkg/lib/python3.12/site-packages:/home/felipe/Desktop/Robotica_Proy/CargaBot/ROS2_Software/ros2_ws/install/lab1_msgs/lib/python3.12/site-packages:/opt/ros/jazzy/lib/python3.12/site-packages', 'HOMEBREW_REPOSITORY': '/home/linuxbrew/.linuxbrew/Homebrew', 'COLCON': '1', 'MEMORY_PRESSURE_WRITE': 'c29tZSAyMDAwMDAgMjAwMDAwMAA=', 'CMAKE_PREFIX_PATH': '/home/felipe/Desktop/Robotica_Proy/CargaBot/ROS2_Software/ros2_ws/install/lab1_msgs:/home/felipe/ros2_ws/install/rplidar_ros:/opt/ros/jazzy/opt/sdformat_vendor:/opt/ros/jazzy/opt/gz_math_vendor:/opt/ros/jazzy/opt/gz_utils_vendor:/opt/ros/jazzy/opt/gz_tools_vendor:/opt/ros/jazzy/opt/gz_cmake_vendor'}, 'shell': False}
+[2.609674] (-) TimerEvent: {}
+[2.710061] (-) TimerEvent: {}
+[2.810469] (-) TimerEvent: {}
+[2.910849] (-) TimerEvent: {}
+[2.959992] (vision_cenital) StderrLine: {'line': b'/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `description` defined outside of `pyproject.toml` would be ignored.\n'}
+[2.960861] (vision_cenital) StderrLine: {'line': b'!!\n'}
+[2.961042] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.961192] (vision_cenital) StderrLine: {'line': b'        ********************************************************************************\n'}
+[2.961350] (vision_cenital) StderrLine: {'line': b'        ##########################################################################\n'}
+[2.961469] (vision_cenital) StderrLine: {'line': b'        # configuration would be ignored/result in error due to `pyproject.toml` #\n'}
+[2.961585] (vision_cenital) StderrLine: {'line': b'        ##########################################################################\n'}
+[2.961701] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.961816] (vision_cenital) StderrLine: {'line': b'        The following seems to be defined outside of `pyproject.toml`:\n'}
+[2.961930] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.962047] (vision_cenital) StderrLine: {'line': b"        `description = 'Visi\xc3\xb3n cenital y control para CargaBot'`\n"}
+[2.962161] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.962281] (vision_cenital) StderrLine: {'line': b'        According to the spec (see the link below), however, setuptools CANNOT\n'}
+[2.962394] (vision_cenital) StderrLine: {'line': b'        consider this value unless `description` is listed as `dynamic`.\n'}
+[2.962506] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.962619] (vision_cenital) StderrLine: {'line': b'        https://packaging.python.org/en/latest/specifications/declaring-project-metadata/\n'}
+[2.962729] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.962839] (vision_cenital) StderrLine: {'line': b'        For the time being, `setuptools` will still consider the given value (as a\n'}
+[2.962950] (vision_cenital) StderrLine: {'line': b'        **transitional** measure), but please note that future releases of setuptools will\n'}
+[2.963061] (vision_cenital) StderrLine: {'line': b'        follow strictly the standard.\n'}
+[2.963175] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.963299] (vision_cenital) StderrLine: {'line': b'        To prevent this warning, you can list `description` under `dynamic` or alternatively\n'}
+[2.963413] (vision_cenital) StderrLine: {'line': b'        remove the `[project]` table from your file and rely entirely on other means of\n'}
+[2.963525] (vision_cenital) StderrLine: {'line': b'        configuration.\n'}
+[2.963636] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.963748] (vision_cenital) StderrLine: {'line': b'        This deprecation is overdue, please update your project and remove deprecated\n'}
+[2.963863] (vision_cenital) StderrLine: {'line': b'        calls to avoid build errors in the future.\n'}
+[2.963996] (vision_cenital) StderrLine: {'line': b'        ********************************************************************************\n'}
+[2.964231] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.964407] (vision_cenital) StderrLine: {'line': b'!!\n'}
+[2.964533] (vision_cenital) StderrLine: {'line': b'  _handle_missing_dynamic(dist, project_table)\n'}
+[2.964651] (vision_cenital) StderrLine: {'line': b'/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `license` defined outside of `pyproject.toml` would be ignored.\n'}
+[2.964785] (vision_cenital) StderrLine: {'line': b'!!\n'}
+[2.964895] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.965001] (vision_cenital) StderrLine: {'line': b'        ********************************************************************************\n'}
+[2.965112] (vision_cenital) StderrLine: {'line': b'        ##########################################################################\n'}
+[2.965229] (vision_cenital) StderrLine: {'line': b'        # configuration would be ignored/result in error due to `pyproject.toml` #\n'}
+[2.965349] (vision_cenital) StderrLine: {'line': b'        ##########################################################################\n'}
+[2.965461] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.965567] (vision_cenital) StderrLine: {'line': b'        The following seems to be defined outside of `pyproject.toml`:\n'}
+[2.965677] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.965788] (vision_cenital) StderrLine: {'line': b"        `license = 'Apache-2.0'`\n"}
+[2.965899] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.966013] (vision_cenital) StderrLine: {'line': b'        According to the spec (see the link below), however, setuptools CANNOT\n'}
+[2.966122] (vision_cenital) StderrLine: {'line': b'        consider this value unless `license` is listed as `dynamic`.\n'}
+[2.966241] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.966367] (vision_cenital) StderrLine: {'line': b'        https://packaging.python.org/en/latest/specifications/declaring-project-metadata/\n'}
+[2.966485] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.966600] (vision_cenital) StderrLine: {'line': b'        For the time being, `setuptools` will still consider the given value (as a\n'}
+[2.966709] (vision_cenital) StderrLine: {'line': b'        **transitional** measure), but please note that future releases of setuptools will\n'}
+[2.966820] (vision_cenital) StderrLine: {'line': b'        follow strictly the standard.\n'}
+[2.966945] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.967058] (vision_cenital) StderrLine: {'line': b'        To prevent this warning, you can list `license` under `dynamic` or alternatively\n'}
+[2.967172] (vision_cenital) StderrLine: {'line': b'        remove the `[project]` table from your file and rely entirely on other means of\n'}
+[2.967306] (vision_cenital) StderrLine: {'line': b'        configuration.\n'}
+[2.967473] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.967584] (vision_cenital) StderrLine: {'line': b'        This deprecation is overdue, please update your project and remove deprecated\n'}
+[2.967701] (vision_cenital) StderrLine: {'line': b'        calls to avoid build errors in the future.\n'}
+[2.967812] (vision_cenital) StderrLine: {'line': b'        ********************************************************************************\n'}
+[2.967921] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.968034] (vision_cenital) StderrLine: {'line': b'!!\n'}
+[2.968148] (vision_cenital) StderrLine: {'line': b'  _handle_missing_dynamic(dist, project_table)\n'}
+[2.968271] (vision_cenital) StderrLine: {'line': b'/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `maintainers` defined outside of `pyproject.toml` would be ignored.\n'}
+[2.968383] (vision_cenital) StderrLine: {'line': b'!!\n'}
+[2.968494] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.968605] (vision_cenital) StderrLine: {'line': b'        ********************************************************************************\n'}
+[2.968719] (vision_cenital) StderrLine: {'line': b'        ##########################################################################\n'}
+[2.968828] (vision_cenital) StderrLine: {'line': b'        # configuration would be ignored/result in error due to `pyproject.toml` #\n'}
+[2.968938] (vision_cenital) StderrLine: {'line': b'        ##########################################################################\n'}
+[2.969046] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.969155] (vision_cenital) StderrLine: {'line': b'        The following seems to be defined outside of `pyproject.toml`:\n'}
+[2.969293] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.969406] (vision_cenital) StderrLine: {'line': b"        `maintainers = 'Felipe'`\n"}
+[2.969516] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.969626] (vision_cenital) StderrLine: {'line': b'        According to the spec (see the link below), however, setuptools CANNOT\n'}
+[2.969736] (vision_cenital) StderrLine: {'line': b'        consider this value unless `maintainers` is listed as `dynamic`.\n'}
+[2.969849] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.969958] (vision_cenital) StderrLine: {'line': b'        https://packaging.python.org/en/latest/specifications/declaring-project-metadata/\n'}
+[2.970068] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.970180] (vision_cenital) StderrLine: {'line': b'        For the time being, `setuptools` will still consider the given value (as a\n'}
+[2.970299] (vision_cenital) StderrLine: {'line': b'        **transitional** measure), but please note that future releases of setuptools will\n'}
+[2.970430] (vision_cenital) StderrLine: {'line': b'        follow strictly the standard.\n'}
+[2.970553] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.970663] (vision_cenital) StderrLine: {'line': b'        To prevent this warning, you can list `maintainers` under `dynamic` or alternatively\n'}
+[2.970767] (vision_cenital) StderrLine: {'line': b'        remove the `[project]` table from your file and rely entirely on other means of\n'}
+[2.970874] (vision_cenital) StderrLine: {'line': b'        configuration.\n'}
+[2.970984] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.971092] (vision_cenital) StderrLine: {'line': b'        This deprecation is overdue, please update your project and remove deprecated\n'}
+[2.971206] (vision_cenital) StderrLine: {'line': b'        calls to avoid build errors in the future.\n'}
+[2.971327] (vision_cenital) StderrLine: {'line': b'        ********************************************************************************\n'}
+[2.971436] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.971545] (vision_cenital) StderrLine: {'line': b'!!\n'}
+[2.971656] (vision_cenital) StderrLine: {'line': b'  _handle_missing_dynamic(dist, project_table)\n'}
+[2.971765] (vision_cenital) StderrLine: {'line': b'/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `scripts` defined outside of `pyproject.toml` would be ignored.\n'}
+[2.971876] (vision_cenital) StderrLine: {'line': b'!!\n'}
+[2.971986] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.972093] (vision_cenital) StderrLine: {'line': b'        ********************************************************************************\n'}
+[2.972208] (vision_cenital) StderrLine: {'line': b'        ##########################################################################\n'}
+[2.972329] (vision_cenital) StderrLine: {'line': b'        # configuration would be ignored/result in error due to `pyproject.toml` #\n'}
+[2.972440] (vision_cenital) StderrLine: {'line': b'        ##########################################################################\n'}
+[2.972551] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.972660] (vision_cenital) StderrLine: {'line': b'        The following seems to be defined outside of `pyproject.toml`:\n'}
+[2.972769] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.972873] (vision_cenital) StderrLine: {'line': b"        `scripts = ['coordinator_node = vision_cenital.overhead_coordinator_node:main', 'virtual_cargabot_node = vision_cenital.virtual_cargabot_node:main']`\n"}
+[2.972982] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.973090] (vision_cenital) StderrLine: {'line': b'        According to the spec (see the link below), however, setuptools CANNOT\n'}
+[2.973200] (vision_cenital) StderrLine: {'line': b'        consider this value unless `scripts` is listed as `dynamic`.\n'}
+[2.973329] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.973440] (vision_cenital) StderrLine: {'line': b'        https://packaging.python.org/en/latest/specifications/declaring-project-metadata/\n'}
+[2.973555] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.973663] (vision_cenital) StderrLine: {'line': b'        For the time being, `setuptools` will still consider the given value (as a\n'}
+[2.973771] (vision_cenital) StderrLine: {'line': b'        **transitional** measure), but please note that future releases of setuptools will\n'}
+[2.973879] (vision_cenital) StderrLine: {'line': b'        follow strictly the standard.\n'}
+[2.973988] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.974095] (vision_cenital) StderrLine: {'line': b'        To prevent this warning, you can list `scripts` under `dynamic` or alternatively\n'}
+[2.974198] (vision_cenital) StderrLine: {'line': b'        remove the `[project]` table from your file and rely entirely on other means of\n'}
+[2.974321] (vision_cenital) StderrLine: {'line': b'        configuration.\n'}
+[2.974434] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.974544] (vision_cenital) StderrLine: {'line': b'        This deprecation is overdue, please update your project and remove deprecated\n'}
+[2.974664] (vision_cenital) StderrLine: {'line': b'        calls to avoid build errors in the future.\n'}
+[2.974774] (vision_cenital) StderrLine: {'line': b'        ********************************************************************************\n'}
+[2.974883] (vision_cenital) StderrLine: {'line': b'\n'}
+[2.974992] (vision_cenital) StderrLine: {'line': b'!!\n'}
+[2.975101] (vision_cenital) StderrLine: {'line': b'  _handle_missing_dynamic(dist, project_table)\n'}
+[3.010997] (-) TimerEvent: {}
+[3.111411] (-) TimerEvent: {}
+[3.211803] (-) TimerEvent: {}
+[3.312190] (-) TimerEvent: {}
+[3.412586] (-) TimerEvent: {}
+[3.512967] (-) TimerEvent: {}
+[3.540696] (vision_cenital) StdoutLine: {'line': b'running egg_info\n'}
+[3.580759] (vision_cenital) StdoutLine: {'line': b'writing build/vision_cenital/vision_cenital.egg-info/PKG-INFO\n'}
+[3.581337] (vision_cenital) StdoutLine: {'line': b'writing dependency_links to build/vision_cenital/vision_cenital.egg-info/dependency_links.txt\n'}
+[3.581848] (vision_cenital) StdoutLine: {'line': b'writing entry points to build/vision_cenital/vision_cenital.egg-info/entry_points.txt\n'}
+[3.582173] (vision_cenital) StdoutLine: {'line': b'writing requirements to build/vision_cenital/vision_cenital.egg-info/requires.txt\n'}
+[3.582521] (vision_cenital) StdoutLine: {'line': b'writing top-level names to build/vision_cenital/vision_cenital.egg-info/top_level.txt\n'}
+[3.613118] (-) TimerEvent: {}
+[3.659433] (vision_cenital) StdoutLine: {'line': b"reading manifest file 'build/vision_cenital/vision_cenital.egg-info/SOURCES.txt'\n"}
+[3.661096] (vision_cenital) StdoutLine: {'line': b"writing manifest file 'build/vision_cenital/vision_cenital.egg-info/SOURCES.txt'\n"}
+[3.661450] (vision_cenital) StdoutLine: {'line': b'running build\n'}
+[3.661610] (vision_cenital) StdoutLine: {'line': b'running build_py\n'}
+[3.662067] (vision_cenital) StdoutLine: {'line': b'copying vision_cenital/overhead_coordinator_node.py -> /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/build/lib/vision_cenital\n'}
+[3.663010] (vision_cenital) StdoutLine: {'line': b'running install\n'}
+[3.671243] (vision_cenital) StdoutLine: {'line': b'running install_lib\n'}
+[3.707829] (vision_cenital) StdoutLine: {'line': b'copying /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/build/lib/vision_cenital/overhead_coordinator_node.py -> /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages/vision_cenital\n'}
+[3.709193] (vision_cenital) StdoutLine: {'line': b'byte-compiling /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages/vision_cenital/overhead_coordinator_node.py to overhead_coordinator_node.cpython-312.pyc\n'}
+[3.712938] (vision_cenital) StdoutLine: {'line': b'running install_data\n'}
+[3.713193] (-) TimerEvent: {}
+[3.713458] (vision_cenital) StdoutLine: {'line': b'running install_egg_info\n'}
+[3.750168] (vision_cenital) StdoutLine: {'line': b"removing '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages/vision_cenital-0.1.0-py3.12.egg-info' (and everything under it)\n"}
+[3.750746] (vision_cenital) StdoutLine: {'line': b'Copying build/vision_cenital/vision_cenital.egg-info to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages/vision_cenital-0.1.0-py3.12.egg-info\n'}
+[3.752397] (vision_cenital) StdoutLine: {'line': b'running install_scripts\n'}
+[3.813346] (-) TimerEvent: {}
+[3.842100] (vision_cenital) StdoutLine: {'line': b'Installing coordinator_node script to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/vision_cenital\n'}
+[3.842506] (vision_cenital) StdoutLine: {'line': b'Installing virtual_cargabot_node script to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/vision_cenital\n'}
+[3.843078] (vision_cenital) StdoutLine: {'line': b"writing list of installed files to '/home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital/install.log'\n"}
+[3.900013] (vision_cenital) CommandEnded: {'returncode': 0}
+[3.913455] (-) TimerEvent: {}
+[3.914152] (vision_cenital) JobEnded: {'identifier': 'vision_cenital', 'rc': 0}
+[3.916785] (-) EventReactorShutdown: {}

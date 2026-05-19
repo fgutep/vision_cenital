@@ -1,0 +1,124 @@
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `description` defined outside of `pyproject.toml` would be ignored.
+!!
+
+        ********************************************************************************
+        ##########################################################################
+        # configuration would be ignored/result in error due to `pyproject.toml` #
+        ##########################################################################
+
+        The following seems to be defined outside of `pyproject.toml`:
+
+        `description = 'Visión cenital y control para CargaBot'`
+
+        According to the spec (see the link below), however, setuptools CANNOT
+        consider this value unless `description` is listed as `dynamic`.
+
+        https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+
+        For the time being, `setuptools` will still consider the given value (as a
+        **transitional** measure), but please note that future releases of setuptools will
+        follow strictly the standard.
+
+        To prevent this warning, you can list `description` under `dynamic` or alternatively
+        remove the `[project]` table from your file and rely entirely on other means of
+        configuration.
+
+        This deprecation is overdue, please update your project and remove deprecated
+        calls to avoid build errors in the future.
+        ********************************************************************************
+
+!!
+  _handle_missing_dynamic(dist, project_table)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `license` defined outside of `pyproject.toml` would be ignored.
+!!
+
+        ********************************************************************************
+        ##########################################################################
+        # configuration would be ignored/result in error due to `pyproject.toml` #
+        ##########################################################################
+
+        The following seems to be defined outside of `pyproject.toml`:
+
+        `license = 'Apache-2.0'`
+
+        According to the spec (see the link below), however, setuptools CANNOT
+        consider this value unless `license` is listed as `dynamic`.
+
+        https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+
+        For the time being, `setuptools` will still consider the given value (as a
+        **transitional** measure), but please note that future releases of setuptools will
+        follow strictly the standard.
+
+        To prevent this warning, you can list `license` under `dynamic` or alternatively
+        remove the `[project]` table from your file and rely entirely on other means of
+        configuration.
+
+        This deprecation is overdue, please update your project and remove deprecated
+        calls to avoid build errors in the future.
+        ********************************************************************************
+
+!!
+  _handle_missing_dynamic(dist, project_table)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `maintainers` defined outside of `pyproject.toml` would be ignored.
+!!
+
+        ********************************************************************************
+        ##########################################################################
+        # configuration would be ignored/result in error due to `pyproject.toml` #
+        ##########################################################################
+
+        The following seems to be defined outside of `pyproject.toml`:
+
+        `maintainers = 'Felipe'`
+
+        According to the spec (see the link below), however, setuptools CANNOT
+        consider this value unless `maintainers` is listed as `dynamic`.
+
+        https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+
+        For the time being, `setuptools` will still consider the given value (as a
+        **transitional** measure), but please note that future releases of setuptools will
+        follow strictly the standard.
+
+        To prevent this warning, you can list `maintainers` under `dynamic` or alternatively
+        remove the `[project]` table from your file and rely entirely on other means of
+        configuration.
+
+        This deprecation is overdue, please update your project and remove deprecated
+        calls to avoid build errors in the future.
+        ********************************************************************************
+
+!!
+  _handle_missing_dynamic(dist, project_table)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:73: _WouldIgnoreField: `scripts` defined outside of `pyproject.toml` would be ignored.
+!!
+
+        ********************************************************************************
+        ##########################################################################
+        # configuration would be ignored/result in error due to `pyproject.toml` #
+        ##########################################################################
+
+        The following seems to be defined outside of `pyproject.toml`:
+
+        `scripts = ['coordinator_node = vision_cenital.overhead_coordinator_node:main', 'virtual_cargabot_node = vision_cenital.virtual_cargabot_node:main']`
+
+        According to the spec (see the link below), however, setuptools CANNOT
+        consider this value unless `scripts` is listed as `dynamic`.
+
+        https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+
+        For the time being, `setuptools` will still consider the given value (as a
+        **transitional** measure), but please note that future releases of setuptools will
+        follow strictly the standard.
+
+        To prevent this warning, you can list `scripts` under `dynamic` or alternatively
+        remove the `[project]` table from your file and rely entirely on other means of
+        configuration.
+
+        This deprecation is overdue, please update your project and remove deprecated
+        calls to avoid build errors in the future.
+        ********************************************************************************
+
+!!
+  _handle_missing_dynamic(dist, project_table)

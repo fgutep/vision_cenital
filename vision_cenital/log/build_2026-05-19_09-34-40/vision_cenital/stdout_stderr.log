@@ -1,0 +1,18 @@
+running develop
+/usr/lib/python3/dist-packages/setuptools/command/easy_install.py:363: UserWarning: Unbuilt egg for pytest-repeat [unknown version] (/usr/lib/python3/dist-packages)
+  self.local_index = Environment(self.shadow_path + sys.path)
+running egg_info
+writing vision_cenital.egg-info/PKG-INFO
+writing dependency_links to vision_cenital.egg-info/dependency_links.txt
+writing entry points to vision_cenital.egg-info/entry_points.txt
+writing requirements to vision_cenital.egg-info/requires.txt
+writing top-level names to vision_cenital.egg-info/top_level.txt
+reading manifest file 'vision_cenital.egg-info/SOURCES.txt'
+writing manifest file 'vision_cenital.egg-info/SOURCES.txt'
+running build_ext
+Creating /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/python3.12/site-packages/vision-cenital.egg-link (link to .)
+Installing coordinator_node script to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/vision_cenital
+Installing virtual_cargabot_node script to /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/install/vision_cenital/lib/vision_cenital
+
+Installed /home/felipe/Desktop/Robotica_Proy/Vision_Cenital_Repo/vision_cenital/vision_cenital/build/vision_cenital
+running symlink_data
