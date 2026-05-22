@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """
-Motor de Procesamiento Espacial Cenital.
-Gestiona correcciones de lente, transformaciones top-down, segmentación semántica
-y la estimación de pose global basada en ArUco (Compatible con OpenCV 4.6.0 y 4.7+).
-
-MODO SIMULADOR:
-  Cuando sim_mode=True (default), el frame que llega ya ES el espacio cenital
-  publicado por VirtualWorldEngine → se omiten undistort y warpPerspective.
-  La pose del robot se toma del tópico /odom en lugar de detectar ArUco,
-  porque el marcador sintético no tiene el patrón interior válido.
-
-MODO HARDWARE:
-  Cuando sim_mode=False, se aplica el pipeline completo de corrección de lente
-  y homografía, y se detecta el ArUco físico de 112 mm sobre el robot.
+perception.py v5
+================
+Fix v5:
+  - ArUco detecta sobre imagen reducida a ARUCO_DETECT_W px de ancho
+  - Dropoff: fill_ratio se calcula sobre tight bbox de píxeles reales
+    para no ser afectado por la dilatación de fusión
+  - Rojo: rango ampliado (hue 0-20 y 155-180) y saturación mínima bajada
+  - Verde: sat/value mínimos subidos a 60/50 para evitar falsos negros
+  - Optimizaciones v3 intactas (PROC_SCALE, COSTMAP_SKIP_FRAMES)
 """
 
 import cv2
@@ -20,242 +16,371 @@ import numpy as np
 import yaml
 from typing import Dict, Tuple, Optional
 
-# ─── Umbral de luminancia para detección de negro ────────────────────────────
-# Simulador: obstáculos son (40,40,40) y fondo es (180,180,180).
-# 35 captura obstáculos sin tocar el fondo. Con cámara real bajar a 10-15.
-BLACK_THRESHOLD = 35
+SIM_PX_PER_CM:        float = 2.5
+BLACK_THRESHOLD:      int   = 40
+BORDER_MARGIN:        int   = 8
+ROBOT_ARUCO_ID:       int   = 69
+ARUCO_REAL_CM:        float = 11.2
+OBSTACLE_DILATION_CM: float = 7.0
 
-# ─── Margen en píxeles para considerar que un contorno "toca el borde" ───────
-# Contornos que tocan el borde del frame son paredes de la pista, no obstáculos.
-BORDER_MARGIN = 2
+PROC_SCALE:          float = 0.5
+COSTMAP_SKIP_FRAMES: int   = 4
+ARUCO_DETECT_W:      int   = 1024   # ancho al que se reduce para detectar ArUco
 
 
 class OverheadPerception:
-    def __init__(self,
-                 camera_params_path: str,
-                 homography_path: str,
+    def __init__(self, camera_params_path: str, homography_path: str,
                  sim_mode: bool = True):
-        """
-        Args:
-            camera_params_path: YAML con intrínsecos de cámara.
-            homography_path:    YAML con homografía y dimensiones de pista.
-            sim_mode:           True → frame ya es cenital (simulador).
-                                False → aplicar undistort + warp (hardware real).
-        """
         self.sim_mode = sim_mode
 
         self.K, self.D, self.img_w, self.img_h = self._load_intrinsics(camera_params_path)
-        self.H, self.pista_w_cm, self.pista_h_cm, self.px_per_cm = self._load_homography(homography_path)
+        self.H, self.pista_w_cm, self.pista_h_cm, self._hw_px_per_cm = \
+            self._load_homography(homography_path)
 
-        # Dimensiones de salida de la imagen con vista de pájaro
+        self.px_per_cm: float = SIM_PX_PER_CM if sim_mode else float(self._hw_px_per_cm)
         self.warped_w = int(self.pista_w_cm * self.px_per_cm)
         self.warped_h = int(self.pista_h_cm * self.px_per_cm)
 
         if not self.sim_mode:
-            # Pre-computar mapas de corrección geométrica solo en modo hardware
             self.mapx, self.mapy = cv2.initUndistortRectifyMap(
                 self.K, self.D, None, self.K,
-                (self.img_w, self.img_h), cv2.CV_32FC1
-            )
-            # Ajustar H escalada a píxeles de salida
+                (self.img_w, self.img_h), cv2.CV_32FC1)
             self.H_scaled = self.H.copy()
             self.H_scaled[0] *= self.px_per_cm
             self.H_scaled[1] *= self.px_per_cm
 
-        # ── INICIALIZACIÓN DE ARUCO (Agnóstica a la versión de OpenCV) ──────
+        # ArUco
         if hasattr(cv2.aruco, 'Dictionary_get'):
             self.aruco_dict   = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
+            self.aruco_params = cv2.aruco.DetectorParameters_create()
+            self.has_new_api  = False
         else:
             self.aruco_dict   = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-
-        if hasattr(cv2.aruco, 'DetectorParameters_create'):
-            self.aruco_params = cv2.aruco.DetectorParameters_create()
-        else:
             self.aruco_params = cv2.aruco.DetectorParameters()
+            self.has_new_api  = hasattr(cv2.aruco, 'ArucoDetector')
+            if self.has_new_api:
+                self.aruco_detector = cv2.aruco.ArucoDetector(
+                    self.aruco_dict, self.aruco_params)
 
-        self.has_new_api = hasattr(cv2.aruco, 'ArucoDetector')
-        if self.has_new_api:
-            self.aruco_detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
+        # Parámetros ArUco más permisivos para imagen cenital
+        if hasattr(self.aruco_params, 'adaptiveThreshWinSizeMin'):
+            self.aruco_params.adaptiveThreshWinSizeMin  = 3
+            self.aruco_params.adaptiveThreshWinSizeMax  = 53
+            self.aruco_params.adaptiveThreshWinSizeStep = 10
+            self.aruco_params.minMarkerPerimeterRate     = 0.02
+            self.aruco_params.maxMarkerPerimeterRate     = 0.5
+            # Muy permisivo: esquinas redondeadas por warpPerspective
+            self.aruco_params.polygonalApproxAccuracyRate = 0.10
+            self.aruco_params.cornerRefinementMethod     = \
+                getattr(cv2.aruco, 'CORNER_REFINE_SUBPIX',
+                        getattr(cv2.aruco, 'CORNER_REFINE_NONE', 0))
+        if hasattr(self.aruco_params, 'perspectiveRemovePixelPerCell'):
+            self.aruco_params.perspectiveRemovePixelPerCell = 3
+        if hasattr(self.aruco_params, 'errorCorrectionRate'):
+            self.aruco_params.errorCorrectionRate = 1.0
 
-    # ── Loaders ──────────────────────────────────────────────────────────────
+        self.robot_pose_cm:  Optional[Tuple[float, float, float]] = None
+        self.robot_bbox_px:  Optional[Tuple[int, int, int, int]]  = None
+
+        dil_px = max(1, int(OBSTACLE_DILATION_CM * self.px_per_cm * PROC_SCALE))
+        self._dilate_kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (dil_px * 2 + 1, dil_px * 2 + 1))
+
+        self._layers_cache:  Optional[Dict[str, np.ndarray]] = None
+        self._costmap_frame: int = 0
 
     @staticmethod
-    def _load_intrinsics(path: str) -> Tuple[np.ndarray, np.ndarray, int, int]:
-        with open(path, 'r') as f:
-            d = yaml.safe_load(f)
+    def _load_intrinsics(path):
+        with open(path) as f: d = yaml.safe_load(f)
         K = np.array(d['camera_matrix']['data']).reshape((3, 3))
         D = np.array(d['dist_coeffs']['data'])
         return K, D, d['image_width'], d['image_height']
 
     @staticmethod
-    def _load_homography(path: str) -> Tuple[np.ndarray, float, float, int]:
-        with open(path, 'r') as f:
-            d = yaml.safe_load(f)
+    def _load_homography(path):
+        with open(path) as f: d = yaml.safe_load(f)
         H     = np.array(d['H']).reshape((3, 3))
-        w     = float(d.get('pista_w_cm',  d.get('pista_size_cm', 200.0)))
-        h     = float(d.get('pista_h_cm',  d.get('pista_size_cm', 200.0)))
+        w     = float(d.get('pista_w_cm',  d.get('pista_size_cm', 408.0)))
+        h     = float(d.get('pista_h_cm',  d.get('pista_size_cm', 206.0)))
         px_cm = int(float(d.get('px_per_cm', d.get('scale_px_per_cm', 5))))
         return H, w, h, px_cm
 
-    # ── Pipeline principal ────────────────────────────────────────────────────
-
     def warp_to_overhead(self, frame: np.ndarray) -> np.ndarray:
-        """
-        Modo hardware: aplica corrección de lente + homografía.
-        Modo simulador: devuelve el frame tal cual (ya es cenital).
-        """
         if self.sim_mode:
             return frame
         undistorted = cv2.remap(frame, self.mapx, self.mapy, cv2.INTER_LINEAR)
-        return cv2.warpPerspective(
-            undistorted, self.H_scaled, (self.warped_w, self.warped_h)
-        )
+        return cv2.warpPerspective(undistorted, self.H_scaled,
+                                   (self.warped_w, self.warped_h))
 
-    def detect_robot_pose(self, warped_frame: np.ndarray) -> Optional[Tuple[float, float, float]]:
+    def detect_robot_pose(self, raw_frame: np.ndarray
+                          ) -> Optional[Tuple[float, float, float]]:
         """
-        Modo hardware: localiza el ArUco físico de 112 mm. Retorna (X_cm, Y_cm, Yaw_rad).
-        Modo simulador: retorna None siempre — usar inject_pose_from_odom() en su lugar.
+        Detecta ArUco sobre el frame sin distorsion (antes del warp).
+        El warp de perspectiva difumina las esquinas; detectamos en la
+        imagen nítida y proyectamos los corners por H_scaled.
         """
         if self.sim_mode:
-            # En simulación la pose viene de /odom, no del ArUco sintético.
             return None
 
+        # 1) Undistort (sin warp) — aquí el marcador aún tiene esquinas nítidas
+        undistorted = cv2.remap(raw_frame, self.mapx, self.mapy,
+                                cv2.INTER_LINEAR)
+
+        fh, fw = undistorted.shape[:2]
+        if fw > ARUCO_DETECT_W:
+            scale = ARUCO_DETECT_W / fw
+            small = cv2.resize(undistorted,
+                               (ARUCO_DETECT_W, int(fh * scale)),
+                               interpolation=cv2.INTER_LINEAR)
+        else:
+            small = undistorted
+            scale = 1.0
+
+        small_gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+        small_gray = self._preprocess_for_aruco(small_gray)
+
         if self.has_new_api:
-            corners, ids, _ = self.aruco_detector.detectMarkers(warped_frame)
+            corners, ids, _ = self.aruco_detector.detectMarkers(small_gray)
         else:
             corners, ids, _ = cv2.aruco.detectMarkers(
-                warped_frame, self.aruco_dict, parameters=self.aruco_params
-            )
+                small_gray, self.aruco_dict, parameters=self.aruco_params)
 
-        if ids is not None and len(ids) > 0:
-            c         = corners[0][0]
-            center_px = np.mean(c, axis=0)
-            x_cm      = center_px[0] / self.px_per_cm
-            y_cm      = center_px[1] / self.px_per_cm
-            front_vec = ((c[0] + c[1]) / 2.0) - ((c[2] + c[3]) / 2.0)
-            yaw_rad   = np.arctan2(front_vec[1], front_vec[0])
-            return float(x_cm), float(y_cm), float(yaw_rad)
-        return None
+        if ids is None or len(ids) == 0:
+            return None
 
-    def inject_pose_from_odom(self,
-                               odom_x_m: float,
-                               odom_y_m: float,
-                               odom_yaw_rad: float) -> Tuple[float, float, float]:
-        """
-        Convierte pose de /odom (metros, frame ROS) a (X_cm, Y_cm, Yaw_rad)
-        en coordenadas de imagen cenital. Usar solo en sim_mode=True.
+        # Preferimos ID 69, pero aceptamos cualquier ArUco detectado
+        chosen_idx = 0
+        for i, mid in enumerate(ids.flatten()):
+            if mid == ROBOT_ARUCO_ID:
+                chosen_idx = i
+                break
 
-        El simulador inicia el robot en (0.5 m, 0.5 m) → corresponde a
-        (50 cm, 50 cm) en la imagen cenital.
-        """
-        x_cm    = odom_x_m * 100.0
-        y_cm    = odom_y_m * 100.0
-        yaw_rad = odom_yaw_rad
-        return float(x_cm), float(y_cm), float(yaw_rad)
+        # 2) Escalar corners a coordenadas full-res del undistorted
+        c_und = corners[chosen_idx][0] / scale
 
-    # ── Segmentación semántica ────────────────────────────────────────────────
+        # 3) Proyectar corners al espacio cenital (overhead) vía H_scaled
+        pts = np.array(c_und, dtype=np.float32).reshape(-1, 1, 2)
+        pts_overhead = cv2.perspectiveTransform(pts, self.H_scaled)
+        c = pts_overhead.reshape(4, 2)
 
-    def extract_semantic_layers(self, warped_frame: np.ndarray) -> Dict[str, np.ndarray]:
-        """
-        Extrae obstáculos y cubos de color del frame cenital.
+        # 4) Pose en cm (coordenadas cenitales)
+        center_px = np.mean(c, axis=0)
+        x_cm = float(center_px[0] / self.px_per_cm)
+        y_cm = float(center_px[1] / self.px_per_cm)
+        fv   = ((c[0]+c[1])/2.0) - ((c[2]+c[3])/2.0)
+        yaw  = float(np.arctan2(fv[1], fv[0]))
 
-        Capas devueltas:
-          'obstacles'        — máscara de obstáculos negros (cinta/bloques)
-          'cube_red_solid'   — cubos rojos sólidos (objetos físicos)
-          'cube_green_solid' — cubos verdes sólidos
-          'cube_blue_solid'  — cubos azules sólidos
-          'cube_red_zone'    — zonas rayadas rojas (drop-off) [solo hardware]
-          'cube_green_zone'  — zonas rayadas verdes [solo hardware]
-          'cube_blue_zone'   — zonas rayadas azules [solo hardware]
-        """
-        hsv   = cv2.cvtColor(warped_frame, cv2.COLOR_BGR2HSV)
-        gray  = cv2.cvtColor(warped_frame, cv2.COLOR_BGR2GRAY)
+        margin = int(ARUCO_REAL_CM * self.px_per_cm * 0.8)
+        xs = c[:, 0]
+        ys = c[:, 1]
+        bx = max(0, int(xs.min()) - margin)
+        by = max(0, int(ys.min()) - margin)
+        bw = min(self.warped_w - bx, int(xs.max() - xs.min()) + 2 * margin)
+        bh = min(self.warped_h - by, int(ys.max() - ys.min()) + 2 * margin)
+
+        self.robot_pose_cm = (x_cm, y_cm, yaw)
+        self.robot_bbox_px = (bx, by, bw, bh)
+        return self.robot_pose_cm
+
+    def inject_pose_from_odom(self, odom_x_m, odom_y_m, odom_yaw_rad,
+                               frame_w_px=0, frame_h_px=0):
+        x_cm = float(odom_x_m * 100.0)
+        y_cm = float(odom_y_m * 100.0)
+        self.robot_pose_cm = (x_cm, y_cm, float(odom_yaw_rad))
+        r_px = int(ARUCO_REAL_CM * self.px_per_cm * 1.2)
+        cx   = int(x_cm * self.px_per_cm)
+        cy   = int(y_cm * self.px_per_cm)
+        self.robot_bbox_px = (max(0, cx-r_px), max(0, cy-r_px), r_px*2, r_px*2)
+        return self.robot_pose_cm
+
+    def _robot_exclusion_mask(self, shape):
+        if self.robot_bbox_px is None:
+            return None
+        mask = np.zeros(shape[:2], dtype=np.uint8)
+        s  = PROC_SCALE
+        bx = int(self.robot_bbox_px[0] * s)
+        by = int(self.robot_bbox_px[1] * s)
+        bw = int(self.robot_bbox_px[2] * s)
+        bh = int(self.robot_bbox_px[3] * s)
+        cv2.rectangle(mask, (bx, by), (bx+bw, by+bh), 255, -1)
+        return mask
+
+    @staticmethod
+    def _preprocess_for_aruco(gray: np.ndarray) -> np.ndarray:
+        """CLAHE + unsharp mask para recuperar esquinas borrosas."""
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        gray = clahe.apply(gray)
+        blurred = cv2.GaussianBlur(gray, (0, 0), 3)
+        gray = cv2.addWeighted(gray, 1.5, blurred, -0.5, 0)
+        return gray
+
+    def _upscale(self, mask: np.ndarray, full_h: int, full_w: int) -> np.ndarray:
+        if mask.shape[:2] == (full_h, full_w):
+            return mask
+        return cv2.resize(mask, (full_w, full_h), interpolation=cv2.INTER_NEAREST)
+
+    def extract_semantic_layers(self, warped_frame: np.ndarray
+                                 ) -> Dict[str, np.ndarray]:
+        full_h, full_w = warped_frame.shape[:2]
+
+        proc_w = int(full_w * PROC_SCALE)
+        proc_h = int(full_h * PROC_SCALE)
+        small  = cv2.resize(warped_frame, (proc_w, proc_h),
+                            interpolation=cv2.INTER_AREA)
+
+        hsv  = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+        fh, fw = gray.shape
+
+        self._costmap_frame += 1
+        if (self._layers_cache is not None and
+                self._costmap_frame % COSTMAP_SKIP_FRAMES != 0):
+            return self._layers_cache
+
         layers: Dict[str, np.ndarray] = {}
 
-        frame_h, frame_w = gray.shape
-
-        # ── 1. Obstáculos (negro intenso) ─────────────────────────────────
-        _, thresh_black = cv2.threshold(
-            gray, BLACK_THRESHOLD, 255, cv2.THRESH_BINARY_INV
-        )
-        kernel_clean  = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        cleaned_black = cv2.morphologyEx(thresh_black, cv2.MORPH_OPEN, kernel_clean)
-
-        contours_blk, _ = cv2.findContours(
-            cleaned_black, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-        valid_obstacles = np.zeros_like(cleaned_black)
-        for cnt in contours_blk:
-            x, y, w, h = cv2.boundingRect(cnt)
-            if h == 0 or w == 0:
-                continue
-
-            # Contornos que tocan el borde son paredes de pista, no obstáculos
-            touches_border = (
-                x <= BORDER_MARGIN
-                or y <= BORDER_MARGIN
-                or (x + w) >= frame_w - BORDER_MARGIN
-                or (y + h) >= frame_h - BORDER_MARGIN
-            )
-            if touches_border:
-                continue
-
-            aspect_ratio = float(w) / h
-            # Largo y delgado → cinta de suelo → ignorar
-            # Compacto/cuadrado → bloque físico → obstáculo
-            if 0.3 < aspect_ratio < 3.0:
-                cv2.drawContours(valid_obstacles, [cnt], -1, 255, -1)
-
-        layers['obstacles'] = valid_obstacles
-
-        # ── 2. Cubos de color ─────────────────────────────────────────────
-        target_area_px = (15.0 * self.px_per_cm) ** 2
-        min_area       = target_area_px * 0.30   # más permisivo que hardware (0.55)
-        max_area       = target_area_px * 1.55
-
+        # ── Rangos de color ───────────────────────────────────────────────────
+        # Rojo: ampliado a hue 0-20 y 155-180, sat mínima 60 (cinta roja viva)
+        # Verde: rango amplio 25-95 para capturar verde claro de dropoff
+        # Azul: rango estándar
         color_ranges = {
-            'cube_red':   [(0, 130, 70), (10, 255, 255), (170, 130, 70), (180, 255, 255)],
-            'cube_green': [(35, 100, 70), (85, 255, 255)],
-            'cube_blue':  [(100, 120, 70), (140, 255, 255)],
+            'cube_red': [
+                (np.array([0,   60,  40]), np.array([20,  255, 255])),
+                (np.array([155, 60,  40]), np.array([180, 255, 255])),
+            ],
+            'cube_green': [
+                (np.array([25,  60,  50]), np.array([95,  255, 255])),
+            ],
+            'cube_blue': [
+                (np.array([90,  60,  40]), np.array([130, 255, 255])),
+            ],
         }
 
+        all_colors_mask = np.zeros((fh, fw), dtype=np.uint8)
+        raw_color_masks: Dict[str, np.ndarray] = {}
+
+        k_ex = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         for name, ranges in color_ranges.items():
-            if len(ranges) == 4:
-                mask = (
-                    cv2.inRange(hsv, np.array(ranges[0]), np.array(ranges[1]))
-                    | cv2.inRange(hsv, np.array(ranges[2]), np.array(ranges[3]))
-                )
-            else:
-                mask = cv2.inRange(hsv, np.array(ranges[0]), np.array(ranges[1]))
+            combined = np.zeros((fh, fw), dtype=np.uint8)
+            for lo, hi in ranges:
+                combined = cv2.bitwise_or(combined, cv2.inRange(hsv, lo, hi))
+            dilated_color = cv2.dilate(combined, k_ex)
+            all_colors_mask = cv2.bitwise_or(all_colors_mask, dilated_color)
+            raw_color_masks[name] = combined
 
-            solid_mask = np.zeros_like(mask)
-            zone_mask  = np.zeros_like(mask)
+        # ── Obstáculos negros ─────────────────────────────────────────────────
+        robot_excl = self._robot_exclusion_mask(gray.shape)
 
-            contours_color, _ = cv2.findContours(
-                mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-            )
-            for cnt in contours_color:
-                area          = cv2.contourArea(cnt)
-                x, y, w, h   = cv2.boundingRect(cnt)
-                bounding_area = w * h
+        _, thresh_black = cv2.threshold(gray, BLACK_THRESHOLD, 255,
+                                        cv2.THRESH_BINARY_INV)
+        thresh_black = cv2.bitwise_and(thresh_black,
+                                       cv2.bitwise_not(all_colors_mask))
+        if robot_excl is not None:
+            thresh_black = cv2.bitwise_and(thresh_black,
+                                           cv2.bitwise_not(robot_excl))
 
-                if bounding_area == 0 or area < min_area or area > max_area:
+        k_clean       = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        cleaned_black = cv2.morphologyEx(thresh_black, cv2.MORPH_OPEN, k_clean)
+
+        cnts_blk, _ = cv2.findContours(cleaned_black, cv2.RETR_EXTERNAL,
+                                        cv2.CHAIN_APPROX_SIMPLE)
+
+        raw_obs   = np.zeros_like(cleaned_black)
+        walls_msk = np.zeros_like(cleaned_black)
+        border    = max(1, int(BORDER_MARGIN * PROC_SCALE))
+
+        for cnt in cnts_blk:
+            x, y, w, h = cv2.boundingRect(cnt)
+            if w == 0 or h == 0: continue
+            on_border = (x <= border or y <= border
+                         or x+w >= fw-border or y+h >= fh-border)
+            if on_border:
+                cv2.drawContours(walls_msk, [cnt], -1, 255, -1)
+                continue
+            if not self.sim_mode:
+                ar = float(w) / h
+                if not (0.3 < ar < 3.0): continue
+            cv2.drawContours(raw_obs, [cnt], -1, 255, -1)
+
+        layers['walls']         = self._upscale(walls_msk, full_h, full_w)
+        layers['obstacles_raw'] = self._upscale(raw_obs,   full_h, full_w)
+
+        dilated = cv2.dilate(raw_obs, self._dilate_kernel)
+        if robot_excl is not None:
+            dilated = cv2.bitwise_and(dilated, cv2.bitwise_not(robot_excl))
+        layers['obstacles'] = self._upscale(dilated, full_h, full_w)
+
+        # ── Cubos y zonas dropoff ─────────────────────────────────────────────
+        #
+        # ESTRATEGIA DROPOFF:
+        # La cinta forma un marco + 2 diagonales. findContours devuelve cada
+        # tira por separado. Para discriminar sólido vs dropoff:
+        #   1. Dilatar la máscara de color para fusionar las tiras en un blob
+        #   2. Encontrar el bounding rect del blob fusionado
+        #   3. Calcular fill = área_original / área_bbox
+        #      - Sólido (bloque compacto): fill > 0.65
+        #      - Dropoff (marco+diagonales): fill 0.15 - 0.55
+        #
+        k_morph  = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        k_fuse   = cv2.getStructuringElement(cv2.MORPH_RECT,    (15, 15))
+
+        target_area_px = (15.0 * self.px_per_cm * PROC_SCALE) ** 2
+        min_area       = target_area_px * 0.10   # más permisivo para dropoff
+        max_area       = target_area_px * 4.00   # dropoff es más grande que un cubo
+
+        for name, combined in raw_color_masks.items():
+            # Limpieza morfológica básica
+            combined = cv2.morphologyEx(combined, cv2.MORPH_OPEN,  k_morph)
+            combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, k_morph)
+
+            # Versión fusionada para detectar blobs completos (sólido+dropoff)
+            fused = cv2.dilate(combined, k_fuse)
+            fused = cv2.morphologyEx(fused, cv2.MORPH_CLOSE, k_fuse)
+
+            solid = np.zeros_like(combined)
+            zone  = np.zeros_like(combined)
+
+            cnts_fused, _ = cv2.findContours(fused, cv2.RETR_EXTERNAL,
+                                              cv2.CHAIN_APPROX_SIMPLE)
+
+            for cnt_f in cnts_fused:
+                x, y, w, h = cv2.boundingRect(cnt_f)
+                bbox_area = float(w * h)
+                if bbox_area < min_area or bbox_area > max_area:
                     continue
 
-                fill_ratio = area / bounding_area
+                # Área real de píxeles de color dentro del bbox (sin dilatar)
+                roi = combined[y:y+h, x:x+w]
+                ys, xs = np.where(roi > 0)
+                if len(xs) == 0:
+                    continue
+                color_px = float(len(xs))
+
+                # Tight bbox de los píxeles reales — ignora expansión del fused
+                tight_w = int(xs.max() - xs.min() + 1)
+                tight_h = int(ys.max() - ys.min() + 1)
+                tight_bbox_area = float(tight_w * tight_h)
+                if tight_bbox_area == 0:
+                    continue
+
+                fill = color_px / tight_bbox_area
 
                 if self.sim_mode:
-                    # Simulador: cubos son rectángulos sólidos perfectos → fill > 0.80
-                    if fill_ratio > 0.75:
-                        cv2.drawContours(solid_mask, [cnt], -1, 255, -1)
+                    if fill > 0.65:
+                        cv2.rectangle(solid, (x, y), (x+w, y+h), 255, -1)
+                    elif 0.10 <= fill <= 0.55:
+                        cv2.rectangle(zone, (x, y), (x+w, y+h), 255, -1)
                 else:
-                    # Hardware: distinguir cubo sólido vs zona rayada de drop-off
-                    if fill_ratio > 0.80:
-                        cv2.drawContours(solid_mask, [cnt], -1, 255, -1)
-                    elif 0.20 <= fill_ratio <= 0.60:
-                        cv2.drawContours(zone_mask, [cnt], -1, 255, -1)
+                    # Hardware:
+                    #   sólido    fill > 0.65  (bloque de foam/carton compacto)
+                    #   dropoff   fill 0.10-0.55 (cinta marco+diagonales)
+                    if fill > 0.65:
+                        cv2.rectangle(solid, (x, y), (x+w, y+h), 255, -1)
+                    elif 0.10 <= fill <= 0.55:
+                        cv2.rectangle(zone, (x, y), (x+w, y+h), 255, -1)
 
-            layers[f'{name}_solid'] = solid_mask
-            layers[f'{name}_zone']  = zone_mask
+            layers[f'{name}_solid'] = self._upscale(solid, full_h, full_w)
+            layers[f'{name}_zone']  = self._upscale(zone,  full_h, full_w)
 
+        self._layers_cache = layers
         return layers

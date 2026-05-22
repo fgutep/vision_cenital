@@ -4,31 +4,31 @@ Integra los motores de Percepción y Planificación, gestiona suscripciones de m
 y transmite comandos secuenciales progresivos a la base motriz de CargaBot.
 Soporta inyección de video por Hardware (GStreamer) o Simulación (Gemelo Digital).
 
-(El día que vayas al lab, solo le pasas el parámetro --ros-args -p use_sim:=false
+(El día que vayas al lab, solo le pasas --ros-args -p use_sim:=false
 y el cerebro volverá a encender la Logitech).
 """
 
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Path
+from nav_msgs.msg import Path, Odometry
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
 import os
+import math
 from ament_index_python.packages import get_package_share_directory
 import numpy as np
 import cv2
 from typing import List, Tuple, Optional
 
-# Importaciones de los módulos del motor interno
 from vision_cenital.camera import CargaCam
 from vision_cenital.perception import OverheadPerception
 from vision_cenital.planning import GridNavigator
 
-# ─── Constantes de visualización ────────────────────────────────────────────
-MAX_DISPLAY_W = 960   # ancho máximo de la ventana de debug (px)
-MAX_DISPLAY_H = 540   # alto  máximo de la ventana de debug (px)
+# ─── Constantes de visualización ─────────────────────────────────────────────
+MAX_DISPLAY_W = 960
+MAX_DISPLAY_H = 540
 
 
 class OverheadCoordinatorNode(Node):
@@ -36,38 +36,41 @@ class OverheadCoordinatorNode(Node):
     def __init__(self):
         super().__init__('overhead_coordinator_node')
 
-        # ── Parámetros configurables ─────────────────────────────────────────
-        self.declare_parameter('pista_w_cm',         408.0)
-        self.declare_parameter('pista_h_cm',         206.0)
-        self.declare_parameter('grid_res_cm',          5.0)
-        self.declare_parameter('robot_radius_cm',     15.0)
-        self.declare_parameter('lookahead_dist_cm',   25.0)
-        self.declare_parameter('max_lateral_drift_cm',10.0)
-        self.declare_parameter('use_sim',              True)  # False → Logitech HW
+        # ── Parámetros configurables ──────────────────────────────────────────
+        self.declare_parameter('pista_w_cm',          408.0)
+        self.declare_parameter('pista_h_cm',          206.0)
+        self.declare_parameter('grid_res_cm',           5.0)
+        self.declare_parameter('robot_radius_cm',      15.0)
+        self.declare_parameter('lookahead_dist_cm',    25.0)
+        self.declare_parameter('max_lateral_drift_cm', 10.0)
+        self.declare_parameter('use_sim',               True)
 
-        # ── Rutas de calibración ─────────────────────────────────────────────
         pkg_share  = get_package_share_directory('vision_cenital')
         cam_params = os.path.join(pkg_share, 'resource', 'camera_params.yaml')
         homography = os.path.join(pkg_share, 'resource', 'homography_retry.yaml')
 
-        # ── Motores internos ─────────────────────────────────────────────────
         p_w          = self.get_parameter('pista_w_cm').value
         p_h          = self.get_parameter('pista_h_cm').value
         g_res        = self.get_parameter('grid_res_cm').value
         r_rad        = self.get_parameter('robot_radius_cm').value
         self.use_sim = self.get_parameter('use_sim').value
 
-        self.perception = OverheadPerception(cam_params, homography)
+        # perception.py ahora recibe sim_mode y ajusta px_per_cm internamente
+        self.perception = OverheadPerception(cam_params, homography,
+                                             sim_mode=self.use_sim)
         self.navigator  = GridNavigator(p_w, p_h, g_res, r_rad)
         self.bridge     = CvBridge()
 
-        # ── Estado del planificador ──────────────────────────────────────────
+        # ── Estado del planificador ───────────────────────────────────────────
         self.current_goal:   Optional[Tuple[float, float]] = None
-        self.current_origin: Optional[Tuple[float, float]] = None  # None → usa pose detectada
+        self.current_origin: Optional[Tuple[float, float]] = None
         self.planned_path:   List[Tuple[float, float]]     = []
         self.latest_frame                                  = None
 
-        # ── Tópicos de comunicación ──────────────────────────────────────────
+        # ── Pose inyectada desde /odom (sim_mode) ────────────────────────────
+        self._odom_pose: Optional[Tuple[float, float, float]] = None
+
+        # ── Tópicos ───────────────────────────────────────────────────────────
         self.sub_goal = self.create_subscription(
             PoseStamped, '/cargabot/goal_pose', self.goal_callback, 10
         )
@@ -75,85 +78,82 @@ class OverheadCoordinatorNode(Node):
         self.pub_cmd_goto = self.create_publisher(PoseStamped, '/cargabot/cmd_goto',             10)
         self.pub_debug    = self.create_publisher(Image,       '/cargabot/overhead_debug_video', 10)
 
-        # ── Ventana de debug + mouse interactivo ─────────────────────────────
-        # La ventana debe existir ANTES de setMouseCallback; se crea aquí una
-        # sola vez para que el callback quede registrado desde el primer frame.
         cv2.namedWindow("CargaBot Digital Twin Dashboard", cv2.WINDOW_NORMAL)
         self.setup_mouse_callback()
 
-        # ── Enrutamiento de video: Simulación vs Hardware ────────────────────
         if self.use_sim:
             self.sub_cam = self.create_subscription(
                 Image, '/cargabot/camera/image_raw', self.cam_callback, 10
             )
+            # Suscripción a /odom para obtener la pose del robot en simulación
+            self.sub_odom = self.create_subscription(
+                Odometry, '/odom', self._odom_callback, 10
+            )
             self.timer = self.create_timer(0.1, self.control_loop)
             self.get_logger().info(
-                "🚀 Cerebro Cenital ONLINE (Modo SIMULACIÓN conectado a ROS 2)."
+                "🚀 Cerebro Cenital ONLINE (Modo SIMULACIÓN) — "
+                f"px_per_cm={self.perception.px_per_cm}"
             )
         else:
             self.cam = CargaCam()
             if self.cam.start():
                 self.timer = self.create_timer(0.1, self.control_loop)
-                self.get_logger().info(
-                    "🚀 Cerebro Cenital ONLINE (Modo HARDWARE /dev/video)."
-                )
+                self.get_logger().info("🚀 Cerebro Cenital ONLINE (Modo HARDWARE).")
             else:
                 self.get_logger().error("❌ Imposible inicializar hardware de video.")
 
-    # ── Callbacks ────────────────────────────────────────────────────────────
+    # ── Callbacks ─────────────────────────────────────────────────────────────
 
     def goal_callback(self, msg: PoseStamped):
-        """Atrapa destinos enviados externamente y solicita re-planificación."""
         self.current_goal = (
-            msg.pose.position.x * 100.0,   # m → cm
+            msg.pose.position.x * 100.0,
             msg.pose.position.y * 100.0,
         )
-        self.get_logger().info(f"🎯 Nueva meta de navegación fijada: {self.current_goal} cm")
-        self.planned_path = []  # Forzar re-planificación limpia
+        self.get_logger().info(f"🎯 Nueva meta: {self.current_goal} cm")
+        self.planned_path = []
 
     def cam_callback(self, msg: Image):
-        """Buffer para los frames del Gemelo Digital."""
         self.latest_frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
-    # ── Mouse interactivo ─────────────────────────────────────────────────────
+    def _odom_callback(self, msg: Odometry):
+        """
+        Convierte la pose de /odom a coordenadas cenitales (cm) y la almacena.
+        Se usa en sim_mode en lugar de detectar el ArUco.
+        """
+        ox = msg.pose.pose.position.x
+        oy = msg.pose.pose.position.y
+        # Quaternion → yaw
+        qz = msg.pose.pose.orientation.z
+        qw = msg.pose.pose.orientation.w
+        yaw = 2.0 * math.atan2(qz, qw)
+        self._odom_pose = self.perception.inject_pose_from_odom(ox, oy, yaw)
+
+    # ── Mouse interactivo ──────────────────────────────────────────────────────
 
     def setup_mouse_callback(self):
-        """Registra el handler de ratón sobre la ventana de debug."""
         cv2.setMouseCallback("CargaBot Digital Twin Dashboard", self._mouse_event)
 
     def _mouse_event(self, event, x, y, flags, param):
-        """
-        Convierte las coordenadas del clic (píxeles de la ventana reescalada)
-        a centímetros del espacio cenital y actualiza el estado del planificador.
-
-        - Clic Izquierdo  → fija origen manual (sobrescribe la detección visual).
-        - Clic Derecho    → fija nueva meta   (dispara re-planificación A*).
-
-        NOTA: x/y llegan en coordenadas de la imagen reescalada, por eso se
-        divide por `self._display_scale` antes de convertir a cm.  El atributo
-        se actualiza cada frame en control_loop para mantener coherencia.
-        """
-        scale   = getattr(self, '_display_scale', 1.0)
-        px_cm   = self.perception.px_per_cm
-        x_cm    = (x / scale) / px_cm
-        y_cm    = (y / scale) / px_cm
+        scale  = getattr(self, '_display_scale', 1.0)
+        px_cm  = self.perception.px_per_cm
+        x_cm   = (x / scale) / px_cm
+        y_cm   = (y / scale) / px_cm
 
         if event == cv2.EVENT_LBUTTONDOWN:
             self.current_origin = (x_cm, y_cm)
-            self.planned_path   = []  # re-planificar desde el nuevo origen
-            self.get_logger().info(f"📍 Origen manual fijado: ({x_cm:.1f}, {y_cm:.1f}) cm")
+            self.planned_path   = []
+            self.get_logger().info(f"📍 Origen manual: ({x_cm:.1f}, {y_cm:.1f}) cm")
 
         elif event == cv2.EVENT_RBUTTONDOWN:
             self.current_goal = (x_cm, y_cm)
-            self.planned_path = []  # re-planificar hacia la nueva meta
-            self.get_logger().info(f"🎯 Meta manual fijada:   ({x_cm:.1f}, {y_cm:.1f}) cm")
+            self.planned_path = []
+            self.get_logger().info(f"🎯 Meta manual:   ({x_cm:.1f}, {y_cm:.1f}) cm")
 
-    # ── Bucle principal ───────────────────────────────────────────────────────
+    # ── Bucle principal ────────────────────────────────────────────────────────
 
     def control_loop(self):
-        """Bucle de control principal del ciclo de vida del robot."""
 
-        # 0. Obtener frame según la fuente de video
+        # 0. Frame
         if self.use_sim:
             if self.latest_frame is None:
                 return
@@ -163,20 +163,26 @@ class OverheadCoordinatorNode(Node):
             if not ret:
                 return
 
-        # 1. Transformación cenital
-        # En modo simulación el frame ya viene en espacio cenital (publicado por
-        # virtual_cargabot_node directamente sin márgenes ni homografía pendiente).
-        warped  = frame if self.use_sim else self.perception.warp_to_overhead(frame)
+        # 1. Transformación cenital (no-op en sim_mode)
+        warped  = self.perception.warp_to_overhead(frame)
         display = warped.copy()
 
-        # 2. Extracción semántica y mapeo de costos
+        # 2. Segmentación y cost map
         layers = self.perception.extract_semantic_layers(warped)
         self.navigator.generate_cost_map(layers['obstacles'])
 
         # 3. Localización del robot
-        robot_pose = self.perception.detect_robot_pose(warped)
+        if self.use_sim:
+            # En simulación: pose viene de /odom (precisa), o del ArUco si el
+            # simulador lo renderiza correctamente.
+            robot_pose = self._odom_pose
+            # Fallback: intentar ArUco igualmente (útil si se mejora el render)
+            if robot_pose is None:
+                robot_pose = self.perception.detect_robot_pose(warped)
+        else:
+            robot_pose = self.perception.detect_robot_pose(warped)
 
-        # 3a. HUD del robot (posición + orientación)
+        # 3a. HUD del robot
         if robot_pose:
             rx, ry, ryaw = robot_pose
             r_px = (
@@ -189,19 +195,18 @@ class OverheadCoordinatorNode(Node):
             dy = int(np.sin(ryaw) * 40)
             cv2.line(display, r_px, (r_px[0] + dx, r_px[1] + dy), (0, 0, 255), 3)
 
-        # 4. Planificación A* y emisión de órdenes Go-To
-        # Origen: origen manual si fue fijado por clic, si no la pose detectada.
+        # 4. Planificación
         start_pose = self.current_origin if self.current_origin else (
             robot_pose[:2] if robot_pose else None
         )
 
-        # ── LOG DE DIAGNÓSTICO: celdas libres + estado start/goal ────────────
+        # ── Diagnóstico ────────────────────────────────────────────────────
         free_cells  = int(np.sum(self.navigator.cost_map == 0))
         total_cells = self.navigator.cost_map.size
         if not hasattr(self, '_diag_counter'):
             self._diag_counter = 0
         self._diag_counter += 1
-        if self._diag_counter % 20 == 0:          # cada ~2 s para no saturar
+        if self._diag_counter % 20 == 0:
             self.get_logger().info(
                 f"🗺️  Cost map: {free_cells}/{total_cells} libres "
                 f"({100*free_cells//total_cells}%) | "
@@ -209,35 +214,35 @@ class OverheadCoordinatorNode(Node):
                 f"origin={self.current_origin} | goal={self.current_goal}"
             )
         if start_pose and self.current_goal:
-            sg   = self.navigator.cm_to_grid(*start_pose)
-            gg   = self.navigator.cm_to_grid(*self.current_goal)
-            sc   = int(self.navigator.cost_map[sg[1], sg[0]])
-            gc   = int(self.navigator.cost_map[gg[1], gg[0]])
+            sg = self.navigator.cm_to_grid(*start_pose)
+            gg = self.navigator.cm_to_grid(*self.current_goal)
+            sc = int(self.navigator.cost_map[sg[1], sg[0]])
+            gc = int(self.navigator.cost_map[gg[1], gg[0]])
             if self._diag_counter % 20 == 0:
                 self.get_logger().info(
                     f"🔍 start_grid={sg} costo={sc} | "
-                    f"goal_grid={gg}  costo={gc} | "
-                    f"{'⚠️  BLOQUEADO — mueve clic a zona libre' if sc>0 or gc>0 else '✅ celdas libres, A* puede correr'}"
+                    f"goal_grid={gg} costo={gc} | "
+                    f"{'⚠️  BLOQUEADO' if sc > 0 or gc > 0 else '✅ celdas libres, A* puede correr'}"
                 )
 
-        # ── SEGUNDA VENTANA: mapa de costos coloreado ────────────────────────
-        cost_vis = self._build_cost_map_vis(start_pose, self.current_goal)
+        # ── Cost map visual ────────────────────────────────────────────────
+        cost_vis   = self._build_cost_map_vis(start_pose, self.current_goal)
         cost_h, cost_w = cost_vis.shape[:2]
-        cost_scale     = min(MAX_DISPLAY_W / cost_w, MAX_DISPLAY_H / cost_h, 1.0)
+        cost_scale = min(MAX_DISPLAY_W / cost_w, MAX_DISPLAY_H / cost_h, 1.0)
         cv2.imshow(
             "CargaBot Cost Map",
-            cv2.resize(cost_vis, (int(cost_w * cost_scale), int(cost_h * cost_scale)),
-                       interpolation=cv2.INTER_NEAREST),   # NEAREST preserva celdas nítidas
+            cv2.resize(cost_vis,
+                       (int(cost_w * cost_scale), int(cost_h * cost_scale)),
+                       interpolation=cv2.INTER_NEAREST),
         )
 
-        # Dibujar marcador de origen manual (cuadrado magenta) si está activo
+        # Marcadores de origen y meta
         if self.current_origin:
             ox_px = int(self.current_origin[0] * self.perception.px_per_cm)
             oy_px = int(self.current_origin[1] * self.perception.px_per_cm)
             cv2.drawMarker(display, (ox_px, oy_px), (255, 0, 255),
                            cv2.MARKER_SQUARE, 14, 2)
 
-        # Dibujar marcador de meta (estrella amarilla) si está activa
         if self.current_goal:
             gx_px = int(self.current_goal[0] * self.perception.px_per_cm)
             gy_px = int(self.current_goal[1] * self.perception.px_per_cm)
@@ -245,8 +250,6 @@ class OverheadCoordinatorNode(Node):
                            cv2.MARKER_STAR, 20, 2)
 
         if self.current_goal and start_pose:
-
-            # Re-planificar si el path está vacío
             if not self.planned_path:
                 self.planned_path = self.navigator.astar_search(
                     start_pose, self.current_goal
@@ -257,19 +260,13 @@ class OverheadCoordinatorNode(Node):
                 )
                 self._publish_ros_path(self.planned_path)
 
-            # Dibujar path planificado
             for i in range(len(self.planned_path) - 1):
-                p1 = (
-                    int(self.planned_path[i][0]     * self.perception.px_per_cm),
-                    int(self.planned_path[i][1]     * self.perception.px_per_cm),
-                )
-                p2 = (
-                    int(self.planned_path[i + 1][0] * self.perception.px_per_cm),
-                    int(self.planned_path[i + 1][1] * self.perception.px_per_cm),
-                )
+                p1 = (int(self.planned_path[i][0]     * self.perception.px_per_cm),
+                      int(self.planned_path[i][1]     * self.perception.px_per_cm))
+                p2 = (int(self.planned_path[i + 1][0] * self.perception.px_per_cm),
+                      int(self.planned_path[i + 1][1] * self.perception.px_per_cm))
                 cv2.line(display, p1, p2, (255, 0, 0), 3)
 
-            # Calcular y emitir comando progresivo
             if robot_pose:
                 target_cmd = self.navigator.calculate_progressive_command(
                     robot_pose,
@@ -279,13 +276,11 @@ class OverheadCoordinatorNode(Node):
                 )
                 if target_cmd:
                     self._publish_goto_cmd(target_cmd)
-                    t_px = (
-                        int(target_cmd[0] * self.perception.px_per_cm),
-                        int(target_cmd[1] * self.perception.px_per_cm),
-                    )
+                    t_px = (int(target_cmd[0] * self.perception.px_per_cm),
+                            int(target_cmd[1] * self.perception.px_per_cm))
                     cv2.circle(display, t_px, 8, (0, 255, 0), -1)
 
-        # 5. Visualización — ventana reescalada para que no tape todo el monitor
+        # 5. Visualización
         h, w = display.shape[:2]
         self._display_scale = min(MAX_DISPLAY_W / w, MAX_DISPLAY_H / h, 1.0)
         display_resized = cv2.resize(
@@ -296,89 +291,68 @@ class OverheadCoordinatorNode(Node):
         cv2.imshow("CargaBot Digital Twin Dashboard", display_resized)
         cv2.waitKey(1)
 
-        # 6. Publicar imagen full-res para ROS 2 (rviz2, grabación, etc.)
         img_msg = self.bridge.cv2_to_imgmsg(display, encoding='bgr8')
         self.pub_debug.publish(img_msg)
 
-    # ── Helpers de visualización ──────────────────────────────────────────────
+    # ── Helpers de visualización ───────────────────────────────────────────────
 
-    def _build_cost_map_vis(
-        self,
-        start_pose: Optional[Tuple[float, float]],
-        goal:       Optional[Tuple[float, float]],
-    ) -> np.ndarray:
-        """
-        Construye una imagen BGR del cost map escalada al tamaño de la pista.
-        Leyenda de colores:
-          ⬛ Negro       → celda libre
-          🟥 Rojo oscuro → obstáculo dilatado (zona de exclusión del robot)
-          🟦 Azul        → waypoints del path A* actual
-          🟪 Magenta     → origen manual
-          🌟 Amarillo    → meta
-          🟩 Verde claro → celda de start/goal OK
-          🔴 Rojo vivo   → celda de start/goal BLOQUEADA
-        """
-        cm = self.navigator.cost_map  # (rows, cols) uint8
-
-        # Base: negro=libre, rojo oscuro=obstáculo
+    def _build_cost_map_vis(self,
+                             start_pose: Optional[Tuple[float, float]],
+                             goal:       Optional[Tuple[float, float]]) -> np.ndarray:
+        cm  = self.navigator.cost_map
         vis = np.zeros((cm.shape[0], cm.shape[1], 3), dtype=np.uint8)
-        vis[cm > 0] = (30, 30, 180)   # rojo oscuro BGR
+        vis[cm > 0] = (30, 30, 180)
 
-        # Path A* en azul
         for x_cm, y_cm in self.planned_path:
             gx, gy = self.navigator.cm_to_grid(x_cm, y_cm)
-            vis[gy, gx] = (200, 80, 0)   # azul
+            vis[gy, gx] = (200, 80, 0)
 
-        # Origen
         if start_pose:
-            sg = self.navigator.cm_to_grid(*start_pose)
-            color = (0, 60, 255) if cm[sg[1], sg[0]] > 0 else (255, 0, 255)  # rojo vivo / magenta
+            sg    = self.navigator.cm_to_grid(*start_pose)
+            color = (0, 60, 255) if cm[sg[1], sg[0]] > 0 else (255, 0, 255)
             cv2.drawMarker(vis, sg, color, cv2.MARKER_SQUARE, 6, 1)
 
-        # Meta
         if goal:
-            gg = self.navigator.cm_to_grid(*goal)
-            color = (0, 60, 255) if cm[gg[1], gg[0]] > 0 else (0, 215, 255)  # rojo vivo / amarillo
+            gg    = self.navigator.cm_to_grid(*goal)
+            color = (0, 60, 255) if cm[gg[1], gg[0]] > 0 else (0, 215, 255)
             cv2.drawMarker(vis, gg, color, cv2.MARKER_STAR, 8, 1)
 
-        # Escalar a resolución de pantalla (NEAREST para ver las celdas)
-        scale_x = int(self.navigator.res * self.perception.px_per_cm)
-        scale_y = int(self.navigator.res * self.perception.px_per_cm)
+        # Escalar al tamaño de la pista manteniendo proporción de celdas
+        scale_x = max(int(self.navigator.res * self.perception.px_per_cm), 1)
+        scale_y = max(int(self.navigator.res * self.perception.px_per_cm), 1)
         vis_up  = cv2.resize(
             vis,
-            (vis.shape[1] * max(scale_x, 1), vis.shape[0] * max(scale_y, 1)),
+            (vis.shape[1] * scale_x, vis.shape[0] * scale_y),
             interpolation=cv2.INTER_NEAREST,
         )
-
-        # Overlay de texto de leyenda
         free_pct = 100 * int(np.sum(cm == 0)) // cm.size
         cv2.putText(vis_up, f"Libres: {free_pct}%  |  Clic izq=origen  Clic der=meta",
                     (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
         return vis_up
 
-    # ── Helpers de publicación ────────────────────────────────────────────────
+    # ── Helpers de publicación ─────────────────────────────────────────────────
 
     def _publish_ros_path(self, path_cm: List[Tuple[float, float]]):
-        msg             = Path()
+        msg = Path()
         msg.header.frame_id = 'map'
         msg.header.stamp    = self.get_clock().now().to_msg()
         for x, y in path_cm:
-            p               = PoseStamped()
-            p.header        = msg.header
-            p.pose.position.x = x / 100.0   # cm → m
+            p = PoseStamped()
+            p.header = msg.header
+            p.pose.position.x = x / 100.0
             p.pose.position.y = y / 100.0
             msg.poses.append(p)
         self.pub_path.publish(msg)
 
     def _publish_goto_cmd(self, target_cm: Tuple[float, float]):
-        msg                   = PoseStamped()
-        msg.header.frame_id   = 'map'
-        msg.header.stamp      = self.get_clock().now().to_msg()
-        msg.pose.position.x   = target_cm[0] / 100.0   # cm → m
-        msg.pose.position.y   = target_cm[1] / 100.0
+        msg = PoseStamped()
+        msg.header.frame_id = 'map'
+        msg.header.stamp    = self.get_clock().now().to_msg()
+        msg.pose.position.x = target_cm[0] / 100.0
+        msg.pose.position.y = target_cm[1] / 100.0
         self.pub_cmd_goto.publish(msg)
 
-    # ── Teardown ──────────────────────────────────────────────────────────────
+    # ── Teardown ───────────────────────────────────────────────────────────────
 
     def destroy_node(self):
         if not self.use_sim:
@@ -386,8 +360,6 @@ class OverheadCoordinatorNode(Node):
         cv2.destroyAllWindows()
         super().destroy_node()
 
-
-# ── Entrypoint ────────────────────────────────────────────────────────────────
 
 def main(args=None):
     rclpy.init(args=args)

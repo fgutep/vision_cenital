@@ -1,10 +1,89 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
+# ── ROS2 / Colcon ───────────────────────────────────────────────────────────
 build/
+install/
+log/
+
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
 dist/
 wheels/
-*.egg-info
+*.egg
+.pytest_cache/
+.mypy_cache/
 
-# Virtual environments
-.venv
+# ── Virtual environments ────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── IDEs / editors ──────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS clutter ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Recordings / snapshots (herramientas de debug) ──────────────────────────
+*.mp4
+*.avi
+*.mov
+aruco_snapshot_*.png
+snapshot_*.png
+
+# ── Misc ────────────────────────────────────────────────────────────────────
+*.log
+
+# ── ROS2 / Colcon ───────────────────────────────────────────────────────────
+build/
+install/
+log/
+
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+wheels/
+*.egg
+.pytest_cache/
+.mypy_cache/
+
+# ── Virtual environments ────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── IDEs / editors ──────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS clutter ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Recordings / snapshots (herramientas de debug) ──────────────────────────
+*.mp4
+*.avi
+*.mov
+aruco_snapshot_*.png
+snapshot_*.png
+
+# ── Misc ────────────────────────────────────────────────────────────────────
+*.log

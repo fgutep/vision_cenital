@@ -1,35 +1,23 @@
 #!/usr/bin/env python3
 """
-CargaBot Vision App — Aplicación Principal de Visión Cenital
-=============================================================
-Unifica standalone_app y overhead_coordinator_node en una sola aplicación.
-Puede correr sin ROS2 (modo standalone) o conectarse a ROS2 automáticamente.
-
-Modos:
-  Sin ROS2:  python cargabot_vision_app.py --params ... --homography ...
-  Con ROS2:  python cargabot_vision_app.py --ros (requiere ros2 sourced)
-  Imagen:    python cargabot_vision_app.py --image foto.jpg
-
-Controles:
-  L-click   Fijar ORIGEN del path
-  R-click   Fijar DESTINO del path
-  R         Limpiar ruta y trail
-  P         Replanificar manualmente
-  D         Toggle debug overlay (costmap, máscaras)
-  ESC / Q   Salir
-
-ROS2 topics publicados (si --ros):
-  /cargabot/global_path        nav_msgs/Path
-  /cargabot/cmd_goto           geometry_msgs/PoseStamped
-  /cargabot/overhead_debug     sensor_msgs/Image
-
-ROS2 topics suscritos (si --ros):
-  /odom                        nav_msgs/Odometry   (pose del robot en sim)
-  /cargabot/goal_pose          geometry_msgs/PoseStamped
-  /cargabot/camera/image_raw   sensor_msgs/Image   (sim mode)
+CargaBot Vision App v2 — Optimizado para rendimiento
+=====================================================
+Cambios vs v1:
+  - WAYLAND_DISPLAY forzado a vacío antes de import cv2 (fix Qt5/xcb)
+  - Nombre de ventana ASCII simple (fix em-dash Qt5)
+  - _draw_grid cacheado como overlay estático (evita N*líneas por frame)
+  - _draw_panel usa coordenadas pre-calculadas
+  - Panel de texto con escala ajustada para legibilidad
+  - Timing de percepción removido (era debug temporal)
 """
 
+# ── CRÍTICO: forzar X11 ANTES de que Qt se inicialice (antes de import cv2) ──
 import os
+os.environ['WAYLAND_DISPLAY'] = ''
+os.environ['QT_QPA_PLATFORM'] = 'xcb'
+os.environ['DISPLAY']         = os.environ.get('DISPLAY', ':0')
+# ─────────────────────────────────────────────────────────────────────────────
+
 import sys
 import math
 import time
@@ -41,13 +29,11 @@ from typing import Optional, List, Tuple, Dict
 import cv2
 import numpy as np
 
-# Path para librerías locales
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from vision_cenital.perception import OverheadPerception, ARUCO_REAL_CM
 from vision_cenital.planning   import GridNavigator
 
-# ROS2 — opcional
 ROS_AVAILABLE = False
 try:
     import rclpy
@@ -91,8 +77,8 @@ def layer_style(name: str):
 
 # ── Helpers de dibujo ─────────────────────────────────────────────────────────
 
-def text(img, msg, pos, scale=0.55, color=C['white'], thick=1):
-    """Texto con sombra negra para legibilidad sobre cualquier fondo."""
+def text(img, msg, pos, scale=0.6, color=C['white'], thick=1):
+    """Texto con sombra negra. Escala mínima 0.6 para legibilidad."""
     cv2.putText(img, msg, pos, cv2.FONT_HERSHEY_DUPLEX, scale, C['black'], thick+3)
     cv2.putText(img, msg, pos, cv2.FONT_HERSHEY_DUPLEX, scale, color,    thick)
 
@@ -106,17 +92,14 @@ def dashed_line(img, p1, p2, color, thick=1, dash=12, gap=6):
         cv2.line(img, a, b, color, thick)
 
 def panel_bg(img, x, y, w, h, alpha=0.60):
-    """Fondo semitransparente."""
     sub = img[y:y+h, x:x+w]
     black = np.zeros_like(sub)
     img[y:y+h, x:x+w] = cv2.addWeighted(sub, 1-alpha, black, alpha, 0)
 
 
-# ── ROS2 Bridge (opcional) ────────────────────────────────────────────────────
+# ── ROS2 Bridge ───────────────────────────────────────────────────────────────
 
 class ROSBridge:
-    """Hilo ROS2 que publica/suscribe en paralelo a la app OpenCV."""
-
     def __init__(self):
         rclpy.init()
         self.node         = rclpy.create_node('cargabot_vision_app')
@@ -126,44 +109,35 @@ class ROSBridge:
         self.ext_goal:    Optional[Tuple] = None
         self._lock        = threading.Lock()
 
-        self.pub_path  = self.node.create_publisher(Path,        '/cargabot/global_path',    10)
-        self.pub_goto  = self.node.create_publisher(PoseStamped, '/cargabot/cmd_goto',        10)
-        self.pub_debug = self.node.create_publisher(ROSImage,    '/cargabot/overhead_debug',  10)
+        self.pub_path  = self.node.create_publisher(Path,        '/cargabot/global_path',   10)
+        self.pub_goto  = self.node.create_publisher(PoseStamped, '/cargabot/cmd_goto',       10)
+        self.pub_debug = self.node.create_publisher(ROSImage,    '/cargabot/overhead_debug', 10)
 
-        self.node.create_subscription(Odometry,     '/odom',
-                                       self._odom_cb,  10)
-        self.node.create_subscription(PoseStamped,  '/cargabot/goal_pose',
-                                       self._goal_cb,  10)
-        self.node.create_subscription(ROSImage,     '/cargabot/camera/image_raw',
-                                       self._cam_cb,   10)
+        self.node.create_subscription(Odometry,    '/odom',                      self._odom_cb, 10)
+        self.node.create_subscription(PoseStamped, '/cargabot/goal_pose',        self._goal_cb, 10)
+        self.node.create_subscription(ROSImage,    '/cargabot/camera/image_raw', self._cam_cb,  10)
 
         self._thread = threading.Thread(target=self._spin, daemon=True)
         self._thread.start()
         print("[ROS2] Bridge online")
 
-    def _spin(self):
-        rclpy.spin(self.node)
+    def _spin(self):   rclpy.spin(self.node)
 
     def _odom_cb(self, msg):
-        qz = msg.pose.pose.orientation.z
-        qw = msg.pose.pose.orientation.w
-        yaw = 2.0 * math.atan2(qz, qw)
+        qz = msg.pose.pose.orientation.z; qw = msg.pose.pose.orientation.w
         with self._lock:
-            self.odom_pose = (
-                msg.pose.pose.position.x,
-                msg.pose.pose.position.y,
-                yaw)
+            self.odom_pose = (msg.pose.pose.position.x,
+                              msg.pose.pose.position.y,
+                              2.0 * math.atan2(qz, qw))
 
     def _goal_cb(self, msg):
         with self._lock:
-            self.ext_goal = (
-                msg.pose.position.x * 100.0,
-                msg.pose.position.y * 100.0)
+            self.ext_goal = (msg.pose.position.x * 100.0,
+                             msg.pose.position.y * 100.0)
 
     def _cam_cb(self, msg):
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        with self._lock:
-            self.latest_frame = frame
+        with self._lock: self.latest_frame = frame
 
     def get_frame(self):
         with self._lock: return self.latest_frame
@@ -180,10 +154,8 @@ class ROSBridge:
         msg.header.frame_id = 'map'
         msg.header.stamp    = self.node.get_clock().now().to_msg()
         for x, y in path_cm:
-            p = PoseStamped()
-            p.header = msg.header
-            p.pose.position.x = x / 100.0
-            p.pose.position.y = y / 100.0
+            p = PoseStamped(); p.header = msg.header
+            p.pose.position.x = x / 100.0; p.pose.position.y = y / 100.0
             msg.poses.append(p)
         self.pub_path.publish(msg)
 
@@ -197,13 +169,10 @@ class ROSBridge:
 
     def publish_debug(self, frame):
         try:
-            msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
-            self.pub_debug.publish(msg)
-        except Exception:
-            pass
+            self.pub_debug.publish(self.bridge.cv2_to_imgmsg(frame, encoding='bgr8'))
+        except Exception: pass
 
-    def shutdown(self):
-        rclpy.shutdown()
+    def shutdown(self): rclpy.shutdown()
 
 
 # ── Aplicación principal ──────────────────────────────────────────────────────
@@ -212,14 +181,13 @@ class CargaBotVisionApp:
 
     LOOKAHEAD_CM        = 22.0
     DEVIATION_THRESHOLD = 15.0
-    TRAIL_MAX            = 500
-    MIN_CUBE_PX          = 100
-    REPLAN_COOLDOWN      = 2.0   # segundos entre replans automáticos
+    TRAIL_MAX           = 500
+    MIN_CUBE_PX         = 100
+    REPLAN_COOLDOWN     = 2.0
 
     def __init__(self, args):
         self.args = args
 
-        # Módulos de visión
         self.perception = OverheadPerception(
             args.params, args.homography,
             sim_mode=getattr(args, 'sim', False))
@@ -229,14 +197,12 @@ class CargaBotVisionApp:
             args.grid_res,
             args.robot_radius)
 
-        # ROS2
         self.ros: Optional[ROSBridge] = None
         if getattr(args, 'ros', False) and ROS_AVAILABLE:
             self.ros = ROSBridge()
         elif getattr(args, 'ros', False):
             print("[WARN] --ros solicitado pero rclpy no disponible")
 
-        # Estado
         self.start_cm:    Optional[Tuple] = None
         self.goal_cm:     Optional[Tuple] = None
         self.active_path: List[Tuple]     = []
@@ -250,16 +216,47 @@ class CargaBotVisionApp:
         self._debug_mode  = False
         self._layers_cache: Dict = {}
 
-        # Ventana OpenCV
-        self.WIN = "CargaBot Vision — Mission Control"
-        cv2.namedWindow(self.WIN, cv2.WINDOW_NORMAL)
-        _dummy = np.zeros((100, 100, 3), dtype=np.uint8)
-        cv2.imshow(self.WIN, _dummy)
-        cv2.waitKey(1)
-        cv2.resizeWindow(self.WIN, 1400, 800)
-        cv2.setMouseCallback(self.WIN, self._mouse)
+        # Cache del grid — se genera una sola vez por tamaño de frame
+        self._grid_overlay: Optional[np.ndarray] = None
+        self._grid_shape:   Optional[Tuple]       = None
 
+        self.WIN = "CargaBot Vision"
+        self._init_window()
         self._print_banner()
+
+    # ── Inicialización ventana ────────────────────────────────────────────────
+
+    def _init_window(self):
+        _dummy = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(_dummy, "Iniciando...", (20, 240),
+                    cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 220, 255), 2)
+
+        print("[Window] Inicializando ventana Qt5/xcb...")
+        cv2.namedWindow(self.WIN, cv2.WINDOW_NORMAL)
+        cv2.imshow(self.WIN, _dummy)
+        for _ in range(20): cv2.waitKey(50)
+
+        try:
+            cv2.setMouseCallback(self.WIN, self._mouse)
+            cv2.resizeWindow(self.WIN, 1400, 800)
+            print("[Window] OK (intento 1 — WINDOW_NORMAL)")
+            return
+        except cv2.error as e:
+            print(f"[Window] Intento 1 fallo: {e}")
+
+        cv2.destroyAllWindows()
+        for _ in range(5): cv2.waitKey(50)
+        cv2.namedWindow(self.WIN, cv2.WINDOW_AUTOSIZE)
+        cv2.imshow(self.WIN, _dummy)
+        for _ in range(20): cv2.waitKey(50)
+
+        try:
+            cv2.setMouseCallback(self.WIN, self._mouse)
+            print("[Window] OK (intento 2 — WINDOW_AUTOSIZE)")
+            return
+        except cv2.error as e:
+            print(f"[Window] Intento 2 fallo: {e}")
+            raise RuntimeError(f"No se pudo inicializar la ventana: {e}")
 
     def _print_banner(self):
         ros_str = "ROS2 ONLINE" if self.ros else "STANDALONE"
@@ -267,12 +264,12 @@ class CargaBotVisionApp:
 ╔══════════════════════════════════════════════╗
 ║   CargaBot Vision App  [{ros_str:^16}]  ║
 ╠══════════════════════════════════════════════╣
-║  L-click  → ORIGEN                          ║
-║  R-click  → DESTINO                         ║
-║  R        → limpiar ruta                    ║
-║  P        → replanificar                    ║
-║  D        → debug overlay                   ║
-║  ESC/Q    → salir                           ║
+║  L-click  -> ORIGEN                         ║
+║  R-click  -> DESTINO                        ║
+║  R        -> limpiar ruta                   ║
+║  P        -> replanificar                   ║
+║  D        -> debug overlay                  ║
+║  ESC/Q    -> salir                          ║
 ╚══════════════════════════════════════════════╝
 """)
 
@@ -283,11 +280,11 @@ class CargaBotVisionApp:
         pt  = (x / ppc, y / ppc)
         if event == cv2.EVENT_LBUTTONDOWN:
             self.start_cm = pt
-            print(f"Origen → ({pt[0]:.1f}, {pt[1]:.1f}) cm")
+            print(f"Origen -> ({pt[0]:.1f}, {pt[1]:.1f}) cm")
             self._plan()
         elif event == cv2.EVENT_RBUTTONDOWN:
             self.goal_cm = pt
-            print(f"Destino → ({pt[0]:.1f}, {pt[1]:.1f}) cm")
+            print(f"Destino -> ({pt[0]:.1f}, {pt[1]:.1f}) cm")
             self._plan()
 
     # ── Planificación ─────────────────────────────────────────────────────────
@@ -300,12 +297,11 @@ class CargaBotVisionApp:
             self.progress     = 0.0
             self.replan_count = 0
             if self.ros: self.ros.publish_path(path)
-            print(f"A* → {len(path)} nodos")
+            print(f"A* -> {len(path)} nodos")
         else:
-            print("A* → sin ruta (obstruida)")
+            print("A* -> sin ruta (obstruida)")
 
     def _auto_replan(self, rx, ry):
-        """Replanifica si la desviación supera el umbral (con cooldown)."""
         now = time.time()
         if now - self._last_replan < self.REPLAN_COOLDOWN: return
         if not self.goal_cm: return
@@ -319,7 +315,6 @@ class CargaBotVisionApp:
             print(f"Replan #{self.replan_count}: desv={self.deviation_cm:.1f}cm")
 
     def _update_tracking(self) -> Optional[Tuple]:
-        """Actualiza desviación, progreso y retorna punto de lookahead."""
         pose = self.perception.robot_pose_cm
         if pose is None or len(self.active_path) < 2: return None
         rx, ry = pose[0], pose[1]
@@ -331,7 +326,6 @@ class CargaBotVisionApp:
         if self.deviation_cm > self.DEVIATION_THRESHOLD:
             self._auto_replan(rx, ry)
 
-        # Lookahead
         accum = 0.0
         lh    = self.active_path[-1]
         for i in range(idx, len(self.active_path)-1):
@@ -341,55 +335,45 @@ class CargaBotVisionApp:
             if accum >= self.LOOKAHEAD_CM:
                 lh = self.active_path[i+1]; break
 
-        # Publicar comando goto a ROS2
         if self.ros and self.perception.robot_pose_cm:
             self.ros.publish_goto(lh)
-
         return lh
 
-    # ── Loop de procesamiento de un frame ─────────────────────────────────────
+    # ── Frame ─────────────────────────────────────────────────────────────────
 
     def _process_frame(self, raw: np.ndarray) -> np.ndarray:
         self._fps_buf.append(time.time())
 
         warped = self.perception.warp_to_overhead(raw)
 
-        # Pose del robot — ANTES de extract_semantic_layers
-        if self.ros and self.ros.get_odom():
+        # Vision primero (sobre frame sin distorsion); odometría como fallback
+        pose = self.perception.detect_robot_pose(raw)
+        if pose is None and self.ros and self.ros.get_odom():
             ox, oy, oyaw = self.ros.get_odom()
             self.perception.inject_pose_from_odom(ox, oy, oyaw)
-        else:
-            self.perception.detect_robot_pose(warped)
 
-        # Goal externo desde ROS2
         if self.ros:
             eg = self.ros.get_ext_goal()
             if eg:
-                self.goal_cm = eg
-                self._plan()
+                self.goal_cm = eg; self._plan()
 
-        # Capas semánticas
         layers = self.perception.extract_semantic_layers(warped)
         self._layers_cache = layers
 
-        # Costmap
         obs = layers.get('obstacles')
         if obs is not None:
             self.navigator.generate_cost_map(obs)
             self._cost_ready = True
 
-        # Trail del robot
         pose = self.perception.robot_pose_cm
         if pose:
             self.robot_trail.append(pose[:2])
             if not self.start_cm:
                 self.start_cm = pose[:2]
 
-        # Render
         display = warped.copy()
         self._render(display, layers)
 
-        # Publicar debug a ROS2
         if self.ros:
             self.ros.publish_debug(display)
 
@@ -399,54 +383,46 @@ class CargaBotVisionApp:
 
     def _render(self, img, layers):
         ppc = max(self.perception.px_per_cm, 0.01)
-
-        # Grid de referencia (5 cm)
         self._draw_grid(img, ppc)
-
-        # Overlay de obstáculos
         self._draw_obstacles(img, layers, ppc)
-
-        # Zonas de dropoff
         self._draw_zones(img, layers, ppc)
-
-        # Cubos sólidos
         self._draw_cubes(img, layers)
 
-        # Path planeado
         lh = None
         if self.active_path:
             lh = self._update_tracking()
             self._draw_path(img, ppc)
 
-        # Trail real
         self._draw_trail(img, ppc)
-
-        # Robot CLAUDIO
         self._draw_robot(img, ppc, lh)
-
-        # Marcadores origen/destino
         self._draw_markers(img, ppc)
-
-        # Paredes
         self._draw_walls(img, layers)
 
-        # Debug overlay
         if self._debug_mode:
             self._draw_debug(img, layers, ppc)
 
-        # Panel de estado (siempre visible)
         self._draw_panel(img)
 
     def _draw_grid(self, img, ppc):
+        """Grid cacheado — se dibuja una sola vez y se reutiliza como overlay."""
         h, w = img.shape[:2]
-        step = max(1, int(5.0 * ppc))
-        for x in range(0, w, step):
-            cv2.line(img, (x, 0), (x, h), (30, 30, 30), 1)
-        for y in range(0, h, step):
-            cv2.line(img, (0, y), (w, y), (30, 30, 30), 1)
+        shape = (h, w)
+
+        if self._grid_shape != shape:
+            # Regenerar cache solo si cambia el tamaño del frame
+            overlay = np.zeros((h, w, 3), dtype=np.uint8)
+            step = max(1, int(5.0 * ppc))
+            for x in range(0, w, step):
+                cv2.line(overlay, (x, 0), (x, h), (30, 30, 30), 1)
+            for y in range(0, h, step):
+                cv2.line(overlay, (0, y), (w, y), (30, 30, 30), 1)
+            self._grid_overlay = overlay
+            self._grid_shape   = shape
+
+        # Blend del grid pre-dibujado sobre el frame
+        cv2.add(img, self._grid_overlay, img)
 
     def _draw_obstacles(self, img, layers, ppc):
-        """Overlay rojo semitransparente sobre obstáculos."""
         obs = layers.get('obstacles')
         if obs is None or not self._cost_ready: return
         try:
@@ -459,7 +435,6 @@ class CargaBotVisionApp:
         except Exception: pass
 
     def _draw_walls(self, img, layers):
-        """Dibuja paredes del perímetro en azul oscuro."""
         walls = layers.get('walls')
         if walls is None: return
         try:
@@ -472,7 +447,6 @@ class CargaBotVisionApp:
         except Exception: pass
 
     def _draw_zones(self, img, layers, ppc):
-        """Zonas de dropoff — borde punteado del color del cubo."""
         for name, mask in layers.items():
             if 'zone' not in name or mask is None: continue
             color, label = layer_style(name)
@@ -481,15 +455,13 @@ class CargaBotVisionApp:
             for cnt in cnts:
                 if cv2.contourArea(cnt) < self.MIN_CUBE_PX: continue
                 x, y, w, h = cv2.boundingRect(cnt)
-                # Rectángulo punteado para diferenciar de sólidos
                 cv2.rectangle(img, (x, y), (x+w, y+h), C['black'], 4)
                 cv2.rectangle(img, (x, y), (x+w, y+h), color, 1)
-                # Líneas diagonales internas (patrón hatch)
                 for i in range(0, w+h, 12):
                     p1 = (x + min(i, w), y + max(0, i-w))
                     p2 = (x + max(0, i-h), y + min(i, h))
                     cv2.line(img, p1, p2, color, 1)
-                text(img, f"DROP-{label}", (x, max(y-6, 14)), 0.45, color)
+                text(img, f"DROP-{label}", (x, max(y-6, 14)), 0.5, color)
 
     def _draw_cubes(self, img, layers):
         for name, mask in layers.items():
@@ -500,23 +472,19 @@ class CargaBotVisionApp:
             for cnt in cnts:
                 if cv2.contourArea(cnt) < self.MIN_CUBE_PX: continue
                 x, y, w, h = cv2.boundingRect(cnt)
-                # Borde grueso negro + borde color fino
                 cv2.rectangle(img, (x-1, y-1), (x+w+1, y+h+1), C['black'], 5)
                 cv2.rectangle(img, (x,   y),   (x+w,   y+h),   color,     2)
-                # Relleno semitransparente
                 overlay = img.copy()
                 cv2.rectangle(overlay, (x, y), (x+w, y+h), color, -1)
                 img[y:y+h, x:x+w] = cv2.addWeighted(
                     img[y:y+h, x:x+w], 0.80, overlay[y:y+h, x:x+w], 0.20, 0)
-                text(img, label, (x+3, max(y-5, 14)), 0.55, color, thick=2)
+                text(img, label, (x+3, max(y-5, 14)), 0.6, color, thick=2)
 
     def _draw_path(self, img, ppc):
         if len(self.active_path) < 2: return
         pts = [(int(p[0]*ppc), int(p[1]*ppc)) for p in self.active_path]
-        # Ruta: línea amarilla con puntos
         for i in range(len(pts)-1):
             cv2.line(img, pts[i], pts[i+1], C['yellow'], 2)
-        # Inicio y fin
         cv2.circle(img, pts[0],   7, C['green'],   -1)
         cv2.circle(img, pts[-1], 10, C['magenta'], -1)
         cv2.circle(img, pts[-1], 10, C['white'],    1)
@@ -528,7 +496,6 @@ class CargaBotVisionApp:
         for i in range(n-1):
             p1 = (int(trail[i][0]*ppc),   int(trail[i][1]*ppc))
             p2 = (int(trail[i+1][0]*ppc), int(trail[i+1][1]*ppc))
-            # Verde más brillante = más reciente
             a  = int(60 + 190 * i / max(n-1, 1))
             cv2.line(img, p1, p2, (a//4, a, a//4), 2)
 
@@ -538,19 +505,14 @@ class CargaBotVisionApp:
         rx = int(pose[0]*ppc); ry = int(pose[1]*ppc); yaw = pose[2]
         r  = max(10, int(ARUCO_REAL_CM * ppc * 0.65))
 
-        # Cuerpo negro con borde cian
-        cv2.rectangle(img, (rx-r, ry-r), (rx+r, ry+r), C['black'],  -1)
-        cv2.rectangle(img, (rx-r, ry-r), (rx+r, ry+r), C['cyan'],    2)
+        cv2.rectangle(img, (rx-r, ry-r), (rx+r, ry+r), C['black'], -1)
+        cv2.rectangle(img, (rx-r, ry-r), (rx+r, ry+r), C['cyan'],   2)
 
-        # Flecha de heading
         al = r + 16
         ex = int(rx + al*np.cos(yaw)); ey = int(ry + al*np.sin(yaw))
         cv2.arrowedLine(img, (rx, ry), (ex, ey), C['cyan'], 2, tipLength=0.35)
+        text(img, "CLAUDIO", (rx-r, max(ry-r-7, 16)), 0.7, C['cyan'], thick=2)
 
-        # Label CLAUDIO
-        text(img, "CLAUDIO", (rx-r, max(ry-r-7, 16)), 0.65, C['cyan'], thick=2)
-
-        # Línea punteada al lookahead
         if lookahead:
             lx = int(lookahead[0]*ppc); ly = int(lookahead[1]*ppc)
             dashed_line(img, (rx, ry), (lx, ly), C['green'], 1)
@@ -560,17 +522,14 @@ class CargaBotVisionApp:
     def _draw_markers(self, img, ppc):
         if self.start_cm:
             sx = int(self.start_cm[0]*ppc); sy = int(self.start_cm[1]*ppc)
-            cv2.drawMarker(img, (sx, sy), C['green'],
-                           cv2.MARKER_CROSS, 22, 2)
-            text(img, "START", (sx+8, sy-8), 0.5, C['green'])
+            cv2.drawMarker(img, (sx, sy), C['green'], cv2.MARKER_CROSS, 22, 2)
+            text(img, "START", (sx+8, sy-8), 0.55, C['green'])
         if self.goal_cm:
             gx = int(self.goal_cm[0]*ppc); gy = int(self.goal_cm[1]*ppc)
-            cv2.drawMarker(img, (gx, gy), C['magenta'],
-                           cv2.MARKER_TILTED_CROSS, 24, 2)
-            text(img, "GOAL", (gx+8, gy-8), 0.5, C['magenta'])
+            cv2.drawMarker(img, (gx, gy), C['magenta'], cv2.MARKER_TILTED_CROSS, 24, 2)
+            text(img, "GOAL", (gx+8, gy-8), 0.55, C['magenta'])
 
     def _draw_debug(self, img, layers, ppc):
-        """Overlay de debug: muestra raw_obstacles en esquina."""
         raw = layers.get('obstacles_raw')
         if raw is None: return
         h, w = img.shape[:2]
@@ -578,26 +537,23 @@ class CargaBotVisionApp:
         thumb = cv2.resize(raw.astype(np.uint8),
                            (thumb_w, thumb_h), interpolation=cv2.INTER_NEAREST)
         thumb_bgr = cv2.cvtColor(thumb, cv2.COLOR_GRAY2BGR)
-        thumb_bgr[thumb > 0] = (50, 50, 220)   # rojo = obstáculo raw
+        thumb_bgr[thumb > 0] = (50, 50, 220)
         img[h-thumb_h-4:h-4, w-thumb_w-4:w-4] = thumb_bgr
-        text(img, "OBS RAW", (w-thumb_w-4, h-thumb_h-8), 0.4, C['orange'])
+        text(img, "OBS RAW", (w-thumb_w-4, h-thumb_h-8), 0.5, C['orange'])
 
     def _draw_panel(self, img):
         lines  = []
         colors = []
 
-        # FPS
         if len(self._fps_buf) > 1:
             fps = len(self._fps_buf) / (self._fps_buf[-1] - self._fps_buf[0] + 1e-6)
             lines.append(f"FPS: {fps:.1f}"); colors.append(C['gray'])
         else:
             lines.append("FPS: --"); colors.append(C['gray'])
 
-        # ROS2
         ros_str = "ROS2: OK" if self.ros else "ROS2: standalone"
         lines.append(ros_str); colors.append(C['teal'] if self.ros else C['gray'])
 
-        # Robot
         pose = self.perception.robot_pose_cm
         if pose:
             lines.append(f"CLAUDIO: ({pose[0]:.1f},{pose[1]:.1f}) cm")
@@ -607,12 +563,11 @@ class CargaBotVisionApp:
         else:
             lines.append("CLAUDIO: no detectado"); colors.append(C['red'])
 
-        # Ruta
         if self.active_path:
             lines.append(f"Ruta: {len(self.active_path)} nodos"); colors.append(C['white'])
             lines.append(f"Progreso: {self.progress*100:.0f}%"); colors.append(C['white'])
-            dev_ok = self.deviation_cm <= self.DEVIATION_THRESHOLD
-            dev_str = f"Desv: {self.deviation_cm:.1f}cm {'OK' if dev_ok else '!REPLANNING'}"
+            dev_ok  = self.deviation_cm <= self.DEVIATION_THRESHOLD
+            dev_str = f"Desv: {self.deviation_cm:.1f}cm {'OK' if dev_ok else '!REPLAN'}"
             lines.append(dev_str); colors.append(C['green'] if dev_ok else C['red'])
             lines.append(f"Replans: {self.replan_count}"); colors.append(C['orange'])
         else:
@@ -620,17 +575,17 @@ class CargaBotVisionApp:
 
         lines.append(f"Costmap: {'OK' if self._cost_ready else 'pendiente'}")
         colors.append(C['green'] if self._cost_ready else C['orange'])
-        lines.append("D: debug  R: clear  P: plan")
+        lines.append("D:debug  R:clear  P:plan")
         colors.append(C['gray'])
 
-        # Fondo
-        pad = 8; lh = 22; pw = 270; ph = len(lines)*lh + pad*2
+        # Panel con texto más grande
+        pad = 10; lh = 26; pw = 310; ph = len(lines) * lh + pad * 2
         panel_bg(img, 0, 0, pw, ph, alpha=0.70)
         cv2.rectangle(img, (0, 0), (pw, ph), (60, 60, 60), 1)
 
         for i, (line, col) in enumerate(zip(lines, colors)):
-            cv2.putText(img, line, (pad, pad+(i+1)*lh),
-                        cv2.FONT_HERSHEY_DUPLEX, 0.46, col, 1)
+            cv2.putText(img, line, (pad, pad + (i+1)*lh),
+                        cv2.FONT_HERSHEY_DUPLEX, 0.58, col, 1)
 
     # ── Modos de ejecución ────────────────────────────────────────────────────
 
@@ -638,16 +593,11 @@ class CargaBotVisionApp:
         raw = cv2.imread(img_path)
         if raw is None:
             print(f"No se pudo abrir: {img_path}"); return
-
-        display = self._process_frame(raw)
-
         while True:
-            # Redibuja en cada frame para que los clicks funcionen
             display = self._process_frame(raw)
             cv2.imshow(self.WIN, display)
             key = cv2.waitKey(30) & 0xFF
             if not self._handle_key(key): break
-
         cv2.destroyAllWindows()
 
     def run_live(self):
@@ -663,23 +613,18 @@ class CargaBotVisionApp:
         cv2.destroyAllWindows()
 
     def run_ros_sim(self):
-        """Modo ROS2: frame viene del topic /cargabot/camera/image_raw."""
         print("[ROS2] Esperando frames en /cargabot/camera/image_raw ...")
         blank = np.zeros((480, 640, 3), dtype=np.uint8)
         text(blank, "Esperando camera/image_raw ...", (20, 240), 0.8, C['yellow'])
         while True:
             frame = self.ros.get_frame() if self.ros else None
-            if frame is not None:
-                display = self._process_frame(frame)
-            else:
-                display = blank.copy()
+            display = self._process_frame(frame) if frame is not None else blank.copy()
             cv2.imshow(self.WIN, display)
             key = cv2.waitKey(1) & 0xFF
             if not self._handle_key(key): break
         cv2.destroyAllWindows()
 
     def _handle_key(self, key: int) -> bool:
-        """Retorna False para salir."""
         if key in (27, ord('q'), ord('Q')): return False
         if key in (ord('r'), ord('R')):
             self.start_cm = self.goal_cm = None
@@ -699,13 +644,12 @@ def main():
     parser = argparse.ArgumentParser(description="CargaBot Vision App")
     parser.add_argument('--params',       default='resource/camera_params.yaml')
     parser.add_argument('--homography',   default='resource/homography_retry.yaml')
-    parser.add_argument('--image',        default='', help="Imagen estática offline")
+    parser.add_argument('--image',        default='')
     parser.add_argument('--grid-res',     type=float, default=5.0,  dest='grid_res')
     parser.add_argument('--robot-radius', type=float, default=15.0, dest='robot_radius')
-    parser.add_argument('--sim',          action='store_true', help="Frame ya es cenital")
-    parser.add_argument('--ros',          action='store_true', help="Conectar a ROS2")
-    parser.add_argument('--ros-sim',      action='store_true', dest='ros_sim',
-                        help="ROS2 con frame desde topic (gemelo digital)")
+    parser.add_argument('--sim',          action='store_true')
+    parser.add_argument('--ros',          action='store_true')
+    parser.add_argument('--ros-sim',      action='store_true', dest='ros_sim')
     args = parser.parse_args()
 
     if args.ros_sim:
@@ -717,10 +661,10 @@ def main():
         print(f"Modo imagen: {args.image}")
         app.run_image(args.image)
     elif args.ros_sim:
-        print("Modo ROS2 simulación")
+        print("Modo ROS2 simulacion")
         app.run_ros_sim()
     else:
-        print("Modo live (cámara real)")
+        print("Modo live (camara real)")
         app.run_live()
 
     if app.ros:
