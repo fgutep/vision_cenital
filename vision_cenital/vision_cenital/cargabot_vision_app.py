@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
-CargaBot Vision App v2 — Optimizado para rendimiento
-=====================================================
-Cambios vs v1:
-  - WAYLAND_DISPLAY forzado a vacío antes de import cv2 (fix Qt5/xcb)
-  - Nombre de ventana ASCII simple (fix em-dash Qt5)
-  - _draw_grid cacheado como overlay estático (evita N*líneas por frame)
-  - _draw_panel usa coordenadas pre-calculadas
-  - Panel de texto con escala ajustada para legibilidad
-  - Timing de percepción removido (era debug temporal)
-"""
+CargaBot Vision App v3 — Rotated hitbox + heading debug
+========================================================
+Cambios vs v2:
+  - _draw_robot: rotated hitbox via get_robot_hitbox_corners_px()
+    with beveled corners, fill, and directional chevron
+  - _draw_heading_debug: compass + angle-to-origin overlay (toggle H)
+  - ROBOT_ARUCO_ID ahora es 0 (perception.py v7)
+  - D: debug overlay | H: heading debug | R: clear | P: plan
+
+  uv run vision_cenital/cargabot_vision_app.py   --params resource/camera_params.yaml   --homography resource/homography_retry.yaml
+
+  Comando para correr con ROS:
+  uv run vision_cenital/cargabot_vision_app.py   --params resource/camera_params.yaml   --homography resource/homography_retry.yaml   --ros
+  """
 
 # ── CRÍTICO: forzar X11 ANTES de que Qt se inicialice (antes de import cv2) ──
 import os
@@ -78,7 +82,6 @@ def layer_style(name: str):
 # ── Helpers de dibujo ─────────────────────────────────────────────────────────
 
 def text(img, msg, pos, scale=0.6, color=C['white'], thick=1):
-    """Texto con sombra negra. Escala mínima 0.6 para legibilidad."""
     cv2.putText(img, msg, pos, cv2.FONT_HERSHEY_DUPLEX, scale, C['black'], thick+3)
     cv2.putText(img, msg, pos, cv2.FONT_HERSHEY_DUPLEX, scale, color,    thick)
 
@@ -214,9 +217,10 @@ class CargaBotVisionApp:
         self._last_replan = 0.0
         self._fps_buf     = deque(maxlen=30)
         self._debug_mode  = False
+        self._heading_debug = False
         self._layers_cache: Dict = {}
 
-        # Cache del grid — se genera una sola vez por tamaño de frame
+        # Cache del grid
         self._grid_overlay: Optional[np.ndarray] = None
         self._grid_shape:   Optional[Tuple]       = None
 
@@ -239,7 +243,7 @@ class CargaBotVisionApp:
         try:
             cv2.setMouseCallback(self.WIN, self._mouse)
             cv2.resizeWindow(self.WIN, 1400, 800)
-            print("[Window] OK (intento 1 — WINDOW_NORMAL)")
+            print("[Window] OK (intento 1 - WINDOW_NORMAL)")
             return
         except cv2.error as e:
             print(f"[Window] Intento 1 fallo: {e}")
@@ -252,7 +256,7 @@ class CargaBotVisionApp:
 
         try:
             cv2.setMouseCallback(self.WIN, self._mouse)
-            print("[Window] OK (intento 2 — WINDOW_AUTOSIZE)")
+            print("[Window] OK (intento 2 - WINDOW_AUTOSIZE)")
             return
         except cv2.error as e:
             print(f"[Window] Intento 2 fallo: {e}")
@@ -261,16 +265,17 @@ class CargaBotVisionApp:
     def _print_banner(self):
         ros_str = "ROS2 ONLINE" if self.ros else "STANDALONE"
         print(f"""
-╔══════════════════════════════════════════════╗
-║   CargaBot Vision App  [{ros_str:^16}]  ║
-╠══════════════════════════════════════════════╣
-║  L-click  -> ORIGEN                         ║
-║  R-click  -> DESTINO                        ║
-║  R        -> limpiar ruta                   ║
-║  P        -> replanificar                   ║
-║  D        -> debug overlay                  ║
-║  ESC/Q    -> salir                          ║
-╚══════════════════════════════════════════════╝
++================================================+
+|   CargaBot Vision App  [{ros_str:^16}]    |
++================================================+
+|  L-click  -> ORIGEN                            |
+|  R-click  -> DESTINO                           |
+|  R        -> limpiar ruta                      |
+|  P        -> replanificar                      |
+|  D        -> debug overlay                     |
+|  H        -> heading debug (grados vs origen)  |
+|  ESC/Q    -> salir                             |
++================================================+
 """)
 
     # ── Mouse ─────────────────────────────────────────────────────────────────
@@ -346,7 +351,6 @@ class CargaBotVisionApp:
 
         warped = self.perception.warp_to_overhead(raw)
 
-        # Vision primero (sobre frame sin distorsion); odometría como fallback
         pose = self.perception.detect_robot_pose(raw)
         if pose is None and self.ros and self.ros.get_odom():
             ox, oy, oyaw = self.ros.get_odom()
@@ -358,6 +362,8 @@ class CargaBotVisionApp:
                 self.goal_cm = eg; self._plan()
 
         layers = self.perception.extract_semantic_layers(warped)
+        self._layers_cache = layers
+        print(f"[DBG] layers keys: {list(layers.keys())}, cost_ready={self._cost_ready}")  # ADD THIS
         self._layers_cache = layers
 
         obs = layers.get('obstacles')
@@ -401,15 +407,16 @@ class CargaBotVisionApp:
         if self._debug_mode:
             self._draw_debug(img, layers, ppc)
 
+        if self._heading_debug:
+            self._draw_heading_debug(img, ppc)
+
         self._draw_panel(img)
 
     def _draw_grid(self, img, ppc):
-        """Grid cacheado — se dibuja una sola vez y se reutiliza como overlay."""
         h, w = img.shape[:2]
         shape = (h, w)
 
         if self._grid_shape != shape:
-            # Regenerar cache solo si cambia el tamaño del frame
             overlay = np.zeros((h, w, 3), dtype=np.uint8)
             step = max(1, int(5.0 * ppc))
             for x in range(0, w, step):
@@ -419,7 +426,6 @@ class CargaBotVisionApp:
             self._grid_overlay = overlay
             self._grid_shape   = shape
 
-        # Blend del grid pre-dibujado sobre el frame
         cv2.add(img, self._grid_overlay, img)
 
     def _draw_obstacles(self, img, layers, ppc):
@@ -500,24 +506,175 @@ class CargaBotVisionApp:
             cv2.line(img, p1, p2, (a//4, a, a//4), 2)
 
     def _draw_robot(self, img, ppc, lookahead):
+        """Draw robot with rotated hitbox, directional chevron, and label."""
         pose = self.perception.robot_pose_cm
         if pose is None: return
         rx = int(pose[0]*ppc); ry = int(pose[1]*ppc); yaw = pose[2]
-        r  = max(10, int(ARUCO_REAL_CM * ppc * 0.65))
 
-        cv2.rectangle(img, (rx-r, ry-r), (rx+r, ry+r), C['black'], -1)
-        cv2.rectangle(img, (rx-r, ry-r), (rx+r, ry+r), C['cyan'],   2)
+        # ── Rotated hitbox from perception ────────────────────────────────────
+        corners = self.perception.get_robot_hitbox_corners_px()
+        if corners is not None:
+            # Semi-transparent fill
+            overlay = img.copy()
+            cv2.fillPoly(overlay, [corners], (40, 40, 40))
+            cv2.addWeighted(overlay, 0.5, img, 0.5, 0, img)
 
-        al = r + 16
-        ex = int(rx + al*np.cos(yaw)); ey = int(ry + al*np.sin(yaw))
-        cv2.arrowedLine(img, (rx, ry), (ex, ey), C['cyan'], 2, tipLength=0.35)
-        text(img, "CLAUDIO", (rx-r, max(ry-r-7, 16)), 0.7, C['cyan'], thick=2)
+            # Border: outer black + inner cyan
+            cv2.polylines(img, [corners], True, C['black'], 3)
+            cv2.polylines(img, [corners], True, C['cyan'],  1)
 
+            # Corner dots for visibility
+            for pt in corners:
+                cv2.circle(img, tuple(pt), 3, C['cyan'], -1)
+        else:
+            # Fallback: simple square if no hitbox available
+            r = max(10, int(ARUCO_REAL_CM * ppc * 0.65))
+            cv2.rectangle(img, (rx-r, ry-r), (rx+r, ry+r), C['black'], -1)
+            cv2.rectangle(img, (rx-r, ry-r), (rx+r, ry+r), C['cyan'],   2)
+
+        # ── Directional chevron (forward indicator) ───────────────────────────
+        chevron_len = int(ARUCO_REAL_CM * ppc * 0.5)
+        chevron_w   = int(ARUCO_REAL_CM * ppc * 0.3)
+        cos_y = np.cos(yaw); sin_y = np.sin(yaw)
+
+        # Tip of chevron (forward)
+        tip = (int(rx + chevron_len * cos_y),
+               int(ry + chevron_len * sin_y))
+        # Two back points of chevron
+        left  = (int(rx - chevron_w * sin_y),
+                 int(ry + chevron_w * cos_y))
+        right = (int(rx + chevron_w * sin_y),
+                 int(ry - chevron_w * cos_y))
+
+        chev_pts = np.array([tip, left, right], dtype=np.int32)
+        cv2.fillPoly(img, [chev_pts], C['cyan'])
+        cv2.polylines(img, [chev_pts], True, C['white'], 1)
+
+        # ── Heading arrow ─────────────────────────────────────────────────────
+        al = int(ARUCO_REAL_CM * ppc * 0.9)
+        ex = int(rx + al*cos_y); ey = int(ry + al*sin_y)
+        cv2.arrowedLine(img, (rx, ry), (ex, ey), C['cyan'], 2, tipLength=0.3)
+
+        # ── Label ─────────────────────────────────────────────────────────────
+        # Place label above the hitbox
+        label_y = ry - int(ARUCO_REAL_CM * ppc * 0.9)
+        text(img, "CLAUDIO", (rx - int(ARUCO_REAL_CM * ppc * 0.7),
+                              max(label_y, 16)), 0.7, C['cyan'], thick=2)
+
+        # ── Heading degrees text near robot ───────────────────────────────────
+        deg = math.degrees(yaw) % 360
+        text(img, f"{deg:.0f}deg", (rx + int(ARUCO_REAL_CM * ppc * 0.8),
+                                     ry - 5), 0.5, C['yellow'])
+
+        # ── Lookahead ─────────────────────────────────────────────────────────
         if lookahead:
             lx = int(lookahead[0]*ppc); ly = int(lookahead[1]*ppc)
             dashed_line(img, (rx, ry), (lx, ly), C['green'], 1)
             cv2.circle(img, (lx, ly), 9, C['green'],  2)
             cv2.circle(img, (lx, ly), 3, C['white'], -1)
+
+    def _draw_heading_debug(self, img, ppc):
+        """
+        Heading debug overlay:
+          - Compass rose at robot position
+          - Angle from robot to origin (0,0)
+          - Angle from origin to robot
+          - Current heading in degrees
+        """
+        pose = self.perception.robot_pose_cm
+        if pose is None: return
+        rx_cm, ry_cm, yaw = pose
+        rx = int(rx_cm * ppc); ry = int(ry_cm * ppc)
+
+        # ── Compass rose around robot ─────────────────────────────────────────
+        compass_r = int(ARUCO_REAL_CM * ppc * 1.8)
+
+        # Draw compass circle
+        cv2.circle(img, (rx, ry), compass_r, C['darkgray'], 1)
+
+        # Cardinal directions
+        for angle_deg, label_str in [(0, 'E'), (90, 'S'), (180, 'W'), (270, 'N')]:
+            a = math.radians(angle_deg)
+            ex = int(rx + compass_r * math.cos(a))
+            ey = int(ry + compass_r * math.sin(a))
+            # Tick mark
+            ix = int(rx + (compass_r - 6) * math.cos(a))
+            iy = int(ry + (compass_r - 6) * math.sin(a))
+            cv2.line(img, (ix, iy), (ex, ey), C['gray'], 2)
+            # Label
+            lx = int(rx + (compass_r + 12) * math.cos(a)) - 5
+            ly = int(ry + (compass_r + 12) * math.sin(a)) + 5
+            text(img, label_str, (lx, ly), 0.45, C['gray'])
+
+        # 45-degree ticks
+        for angle_deg in [45, 135, 225, 315]:
+            a = math.radians(angle_deg)
+            ex = int(rx + compass_r * math.cos(a))
+            ey = int(ry + compass_r * math.sin(a))
+            ix = int(rx + (compass_r - 4) * math.cos(a))
+            iy = int(ry + (compass_r - 4) * math.sin(a))
+            cv2.line(img, (ix, iy), (ex, ey), C['darkgray'], 1)
+
+        # Current heading line on compass (bright cyan)
+        hx = int(rx + compass_r * math.cos(yaw))
+        hy = int(ry + compass_r * math.sin(yaw))
+        cv2.line(img, (rx, ry), (hx, hy), C['cyan'], 2)
+
+        # ── Angle to origin (0,0) ────────────────────────────────────────────
+        origin_px_x = 0; origin_px_y = 0
+
+        # Draw origin marker
+        cv2.drawMarker(img, (origin_px_x, origin_px_y),
+                        C['yellow'], cv2.MARKER_DIAMOND, 16, 2)
+        text(img, "ORIGIN", (origin_px_x + 10, origin_px_y + 16), 0.5, C['yellow'])
+
+        # Angle from robot to origin
+        dx = 0.0 - rx_cm
+        dy = 0.0 - ry_cm
+        angle_to_origin = math.atan2(dy, dx)
+        angle_to_origin_deg = math.degrees(angle_to_origin) % 360
+
+        # Relative angle (heading vs direction to origin)
+        rel_angle = math.degrees(angle_to_origin - yaw) % 360
+        if rel_angle > 180: rel_angle -= 360
+
+        # Draw dashed line to origin
+        dashed_line(img, (rx, ry), (origin_px_x, origin_px_y),
+                    C['yellow'], 1, dash=8, gap=8)
+
+        # Angle arc on compass showing direction to origin
+        arc_r = compass_r - 10
+        ox_c = int(rx + arc_r * math.cos(angle_to_origin))
+        oy_c = int(ry + arc_r * math.sin(angle_to_origin))
+        cv2.circle(img, (ox_c, oy_c), 4, C['yellow'], -1)
+
+        # ── Info panel (bottom-right of compass) ──────────────────────────────
+        heading_deg = math.degrees(yaw) % 360
+        dist_to_origin = math.hypot(rx_cm, ry_cm)
+
+        info_x = rx + compass_r + 20
+        info_y = ry - 40
+
+        # Ensure panel stays on screen
+        h_img, w_img = img.shape[:2]
+        if info_x + 200 > w_img: info_x = rx - compass_r - 220
+        if info_y < 10: info_y = 10
+        if info_y + 120 > h_img: info_y = h_img - 130
+
+        pw, ph = 210, 110
+        panel_bg(img, max(0, info_x), max(0, info_y), pw, ph, alpha=0.75)
+        cv2.rectangle(img, (info_x, info_y), (info_x+pw, info_y+ph),
+                      C['darkgray'], 1)
+
+        lh = 22
+        text(img, f"Hdg: {heading_deg:.1f}deg",
+             (info_x+8, info_y + lh), 0.5, C['cyan'])
+        text(img, f"->Origin: {angle_to_origin_deg:.1f}deg",
+             (info_x+8, info_y + lh*2), 0.5, C['yellow'])
+        text(img, f"Rel: {rel_angle:+.1f}deg",
+             (info_x+8, info_y + lh*3), 0.5, C['orange'])
+        text(img, f"Dist: {dist_to_origin:.1f}cm",
+             (info_x+8, info_y + lh*4), 0.5, C['white'])
 
     def _draw_markers(self, img, ppc):
         if self.start_cm:
@@ -558,7 +715,8 @@ class CargaBotVisionApp:
         if pose:
             lines.append(f"CLAUDIO: ({pose[0]:.1f},{pose[1]:.1f}) cm")
             colors.append(C['cyan'])
-            lines.append(f"Hdg: {math.degrees(pose[2]):.1f}deg")
+            deg = math.degrees(pose[2]) % 360
+            lines.append(f"Hdg: {deg:.1f}deg")
             colors.append(C['cyan'])
         else:
             lines.append("CLAUDIO: no detectado"); colors.append(C['red'])
@@ -575,11 +733,10 @@ class CargaBotVisionApp:
 
         lines.append(f"Costmap: {'OK' if self._cost_ready else 'pendiente'}")
         colors.append(C['green'] if self._cost_ready else C['orange'])
-        lines.append("D:debug  R:clear  P:plan")
+        lines.append("D:debug H:heading R:clear P:plan")
         colors.append(C['gray'])
 
-        # Panel con texto más grande
-        pad = 10; lh = 26; pw = 310; ph = len(lines) * lh + pad * 2
+        pad = 10; lh = 26; pw = 330; ph = len(lines) * lh + pad * 2
         panel_bg(img, 0, 0, pw, ph, alpha=0.70)
         cv2.rectangle(img, (0, 0), (pw, ph), (60, 60, 60), 1)
 
@@ -635,6 +792,9 @@ class CargaBotVisionApp:
         elif key in (ord('d'), ord('D')):
             self._debug_mode = not self._debug_mode
             print(f"Debug: {'ON' if self._debug_mode else 'OFF'}")
+        elif key in (ord('h'), ord('H')):
+            self._heading_debug = not self._heading_debug
+            print(f"Heading debug: {'ON' if self._heading_debug else 'OFF'}")
         return True
 
 
