@@ -473,6 +473,11 @@ class OverheadPerception:
 
         # ── Obstáculos negros ─────────────────────────────────────────────────
         robot_excl = self._robot_exclusion_mask(gray.shape)
+        # Exclude robot vicinity from color detections
+        if robot_excl is not None:
+            for name in raw_color_masks:
+                raw_color_masks[name] = cv2.bitwise_and(
+                    raw_color_masks[name], cv2.bitwise_not(robot_excl))
 
         _, thresh_black = cv2.threshold(gray, BLACK_THRESHOLD, 255,
                                         cv2.THRESH_BINARY_INV)
