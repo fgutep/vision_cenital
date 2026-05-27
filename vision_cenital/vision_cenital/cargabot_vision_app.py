@@ -1,39 +1,41 @@
 #!/usr/bin/env python3
 """
-CargaBot Vision App v7 — Alignment + Ignore brush + Cube-aware planning
-========================================================================
-Changes vs v6:
+CargaBot Vision App v7.1 — Zone center + Hard stop + Manual mode + Cube intercept
+==================================================================================
+Changes vs v7:
 
-  ── MULTI-POINT FRONT-LINE ALIGNMENT ──
-  - Goal-reached for targets now checks 3 points along Claudio's front edge:
-    center, left-quarter, right-quarter.
-  - ALL 3 must be within FRONT_LINE_REACH_CM of the target box edges.
-  - This ensures the robot is actually aligned with a face, not just
-    touching a corner.
+  ── ZONE-CENTER DESTINATIONS ──
+  - When selecting a drop-off zone (kind='zone'), the approach pose now points
+    to the CENTER of the zone (where the ID badge is drawn), with heading
+    computed from Claudio's current position toward the zone center.
+  - Zones use a Euclidean-to-center arrival check (ZONE_REACH_CM) instead
+    of the 3-point front-line check. This guarantees the robot enters the zone.
+  - Cubes still use perpendicular face standoff + 3-point alignment.
 
-  ── IGNORE BRUSH ──
-  - Middle-click (or E + left-click) places a circular ignore zone on the
-    overhead image. Anything inside is masked out of ALL semantic layers
-    (obstacles, cubes, zones).
-  - 'X' key clears all ignore zones.
-  - Useful for false-positive obstacles or phantom detections.
-  - Zones persist across frames, stored as list of (cx_cm, cy_cm, r_cm).
+  ── HARD STOP WITH COOLDOWN ──
+  - `R` key (and `S`) now call `_hard_stop()` which sends multiple stop
+    commands and sets a 800ms cooldown during which `_send_motion()` is
+    suppressed. Eliminates the residual wandering / circling after cancel.
+  - All goal-reached paths also use `_hard_stop()`.
 
-  ── TWO-PASS A* (CUBE-AWARE PLANNING) ──
-  - Pass 1: Plan with cubes added to the costmap as obstacles.
-    Blocks are 3D — they are real physical obstacles even though
-    perception doesn't classify them as "black obstacles".
-  - Pass 2 (fallback): If pass 1 finds no route, plan with the
-    original costmap (cubes ignored). This handles cases where the
-    only path goes through a cube field.
-  - The SELECTED target's cube is always excluded from the costmap
-    (you need to reach it, not avoid it).
+  ── MANUAL / TELEOP OVERRIDE ──
+  - `M` key toggles manual mode. When ON: vision suspends all motion command
+    publishing; teleop (publishing directly to turtlebot_cmdVel) takes over.
+  - When OFF: cooldown resets, auto resumes. If a path was loaded, the
+    deviation check will likely trigger an auto-replan from the new position.
+  - Target select keys (1-9) are blocked while in manual mode.
 
-Usage:
-  uv run vision_cenital/cargabot_vision_app.py \
-    --params resource/camera_params.yaml \
-    --homography resource/homography_retry.yaml \
-    --ros
+  ── CUBE INTERCEPT (anti-oscillation) ──
+  - In final approach for CUBES: heading reference switches from the
+    dynamic path lookahead to the LOCKED approach heading (the one chosen
+    when the target was selected). This stops the robot from rotating
+    back-and-forth as the lookahead recomputes.
+  - Forward progress is the projection of the remaining distance along
+    the locked heading (not Euclidean to lookahead). The robot drives
+    STRAIGHT into the cube face.
+  - When all 3 front-line points are within a wider "approach window"
+    (FRONT_LINE_INTERCEPT_CM = 12cm), the robot commits to gentle push-in
+    steps regardless of alignment, until contact (FRONT_LINE_REACH_CM=6cm).
 """
 
 # ── CRITICO: forzar X11 ANTES de que Qt se inicialice ──
@@ -99,7 +101,7 @@ def _layer_style(name: str):
     return _GY, name.upper()
 
 
-# ── Helpers de dibujo (optimizados — from v6) ────────────────────────────────
+# ── Helpers de dibujo ─────────────────────────────────────────────────────────
 
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -147,7 +149,7 @@ class Target:
         return f"{pfx}{self.color_name} #{self.id}"
 
 
-# ── ROS2 Bridge (unchanged from v6) ──────────────────────────────────────────
+# ── ROS2 Bridge ───────────────────────────────────────────────────────────────
 
 class ROSBridge:
     def __init__(self):
@@ -231,23 +233,30 @@ class CargaBotVisionApp:
 
     # ── Claudio geometry ──────────────────────────────────────────────────────
     CLAUDIO_HALF_LENGTH_CM      = 21.5
-    CLAUDIO_HALF_WIDTH_CM       = 12.0   # NEW: for multi-point front-line
+    CLAUDIO_HALF_WIDTH_CM       = 12.0
     CLAUDIO_EXCLUSION_DILATE_CM = 8.0
 
     # ── Approach ──────────────────────────────────────────────────────────────
-    APPROACH_MARGIN_CM     = 5.0
-    FRONT_LINE_REACH_CM    = 6.0
-    FINAL_APPROACH_CM      = 35.0
-    FINAL_MOVE_CAP_CM      = 8.0
-    FINAL_ROT_TOL_DEG      = 20.0
-    DECEL_FACTOR           = 0.45
+    APPROACH_MARGIN_CM      = 5.0
+    FRONT_LINE_REACH_CM     = 6.0    # contact threshold for cubes (all 3 points)
+    FRONT_LINE_INTERCEPT_CM = 12.0   # commit-to-intercept window for cubes
+    FINAL_APPROACH_CM       = 35.0   # generic final-approach radius
+    FINAL_APPROACH_ZONE_CM  = 18.0   # tighter radius for zones
+    FINAL_MOVE_CAP_CM       = 8.0    # max step in final approach (cubes)
+    INTERCEPT_MOVE_CAP_CM   = 4.0    # gentle push-in steps for cube intercept
+    FINAL_ROT_TOL_DEG       = 20.0
+    INTERCEPT_ROT_TOL_DEG   = 35.0   # very wide once committed to intercept
+    DECEL_FACTOR            = 0.45
+
+    # Zone arrival
+    ZONE_REACH_CM           = 8.0    # robot center within this of zone center = arrived
 
     # ── Tracking ──────────────────────────────────────────────────────────────
-    LOOKAHEAD_CM        = 22.0
-    DEVIATION_THRESHOLD = 15.0
-    TRAIL_MAX           = 300
-    MIN_CUBE_PX         = 100
-    REPLAN_COOLDOWN     = 2.0
+    LOOKAHEAD_CM         = 22.0
+    DEVIATION_THRESHOLD  = 15.0
+    TRAIL_MAX            = 300
+    MIN_CUBE_PX          = 100
+    REPLAN_COOLDOWN      = 2.0
     TARGET_TRACK_DIST_CM = 25.0
     GOAL_REACHED_CM      = 8.0
 
@@ -255,8 +264,11 @@ class CargaBotVisionApp:
     ROTATE_THRESHOLD_DEG = 8.0
     MOVE_THRESHOLD_CM    = 3.0
 
+    # ── Stop / manual override ────────────────────────────────────────────────
+    STOP_COOLDOWN_SEC    = 0.8    # suppress motion commands for this long after stop
+
     # ── Ignore brush ──────────────────────────────────────────────────────────
-    IGNORE_RADIUS_CM     = 12.0   # radius of each ignore zone
+    IGNORE_RADIUS_CM     = 12.0
 
     # ── Performance intervals ─────────────────────────────────────────────────
     LAYER_INTERVAL     = 3
@@ -264,7 +276,7 @@ class CargaBotVisionApp:
     _EXCL_RECOMPUTE_CM = 2.0
 
     # ── Cube costmap dilation ─────────────────────────────────────────────────
-    CUBE_DILATION_CM   = 5.0    # extra dilation for cube obstacles in pass-1
+    CUBE_DILATION_CM   = 5.0
 
     def __init__(self, args):
         self.args = args
@@ -301,19 +313,25 @@ class CargaBotVisionApp:
         # ── Targets + locked approach ─────────────────────────────────────────
         self.targets: List[Target] = []
         self.selected_target_id: Optional[int] = None
+        self._selected_kind: Optional[str] = None  # 'cube' or 'zone', cached
         self._locked_approach: Optional[Tuple[float, float, float]] = None
         self._locked_target_center: Optional[Tuple[float, float]] = None
         self._in_final_approach = False
+        self._in_intercept = False  # NEW: committed cube intercept phase
 
-        # ── Ignore zones (NEW v7) ─────────────────────────────────────────────
-        self._ignore_zones: List[Tuple[float, float, float]] = []  # (cx_cm, cy_cm, r_cm)
-        self._ignore_mode = False  # toggled with E key
+        # ── Manual / teleop override (NEW v7.1) ──────────────────────────────
+        self._manual_mode = False
+        self._stop_until = 0.0  # cooldown timestamp after manual/auto stop
+
+        # ── Ignore zones ──────────────────────────────────────────────────────
+        self._ignore_zones: List[Tuple[float, float, float]] = []
+        self._ignore_mode = False
 
         # ── Layers cache ──────────────────────────────────────────────────────
         self._layers_cache: Dict = {}
         self._frame_count = 0
 
-        # ── Cube obstacle mask for two-pass planning (NEW v7) ─────────────────
+        # ── Cube obstacle mask for two-pass planning ──────────────────────────
         self._cube_obstacle_mask: Optional[np.ndarray] = None
 
         # ── Exclusion cache ───────────────────────────────────────────────────
@@ -354,7 +372,8 @@ class CargaBotVisionApp:
 
     def _print_banner(self):
         r = "ROS2 ON" if self.ros else "STANDALONE"
-        print(f"\n  CargaBot v7 [{r}]  |  1-9:target  R:clr  P:plan  D:dbg  S:stop  E:ignore  X:clr-ignore\n")
+        print(f"\n  CargaBot v7.1 [{r}]  |  1-9:target  R:clr+stop  P:plan  M:manual  "
+              f"S:stop  D:dbg  E:ignore  X:clr-ignore\n")
 
     # ── Mouse ─────────────────────────────────────────────────────────────────
 
@@ -364,29 +383,30 @@ class CargaBotVisionApp:
 
         if ev == cv2.EVENT_RBUTTONDOWN:
             if self._ignore_mode:
-                # Right-click in ignore mode: place ignore zone
                 self._ignore_zones.append((pt_cm[0], pt_cm[1], self.IGNORE_RADIUS_CM))
-                print(f"[IGN] Added ignore zone at ({pt_cm[0]:.1f},{pt_cm[1]:.1f}) r={self.IGNORE_RADIUS_CM}cm "
-                      f"({len(self._ignore_zones)} total)")
+                print(f"[IGN] Added at ({pt_cm[0]:.1f},{pt_cm[1]:.1f}) "
+                      f"r={self.IGNORE_RADIUS_CM}cm ({len(self._ignore_zones)} total)")
                 return
-            # Normal right-click: set goal
+            if self._manual_mode:
+                print("[M] Manual mode active — ignoring goal. Press M to resume auto.")
+                return
             self.goal_cm = pt_cm
             self.goal_heading = None
             self.selected_target_id = None
+            self._selected_kind = None
             self._locked_approach = None
             self._in_final_approach = False
+            self._in_intercept = False
             self._plan()
 
         elif ev == cv2.EVENT_MBUTTONDOWN:
-            # Middle-click: always place ignore zone
             self._ignore_zones.append((pt_cm[0], pt_cm[1], self.IGNORE_RADIUS_CM))
-            print(f"[IGN] Added ignore zone at ({pt_cm[0]:.1f},{pt_cm[1]:.1f}) r={self.IGNORE_RADIUS_CM}cm "
-                  f"({len(self._ignore_zones)} total)")
+            print(f"[IGN] Added at ({pt_cm[0]:.1f},{pt_cm[1]:.1f}) "
+                  f"r={self.IGNORE_RADIUS_CM}cm ({len(self._ignore_zones)} total)")
 
     # ── Ignore mask ───────────────────────────────────────────────────────────
 
     def _build_ignore_mask(self, shape: Tuple[int, int]) -> Optional[np.ndarray]:
-        """Build a mask from all ignore zones. Returns None if no zones."""
         if not self._ignore_zones:
             return None
         ppc = max(self.perception.px_per_cm, 0.01)
@@ -396,22 +416,18 @@ class CargaBotVisionApp:
         return mask
 
     def _apply_ignore(self, layers: Dict, img_shape: Tuple[int, int]):
-        """Zero out all layer pixels inside ignore zones."""
         ign = self._build_ignore_mask(img_shape)
-        if ign is None:
-            return
+        if ign is None: return
         for name, mask in list(layers.items()):
-            if mask is None or 'raw' in name:
-                continue
+            if mask is None or 'raw' in name: continue
             m = mask if mask.dtype == np.uint8 else mask.astype(np.uint8)
             if ign.shape != m.shape[:2]:
                 ig = cv2.resize(ign, (m.shape[1], m.shape[0]), interpolation=cv2.INTER_NEAREST)
-            else:
-                ig = ign
+            else: ig = ign
             m[ig > 0] = 0
             layers[name] = m
 
-    # ── Exclusion (cached — from v6) ──────────────────────────────────────────
+    # ── Exclusion (cached) ────────────────────────────────────────────────────
 
     def _get_exclusion_mask(self, img_shape: Tuple[int, int]) -> Optional[np.ndarray]:
         corners = self.perception.get_robot_hitbox_corners_px()
@@ -462,41 +478,31 @@ class CargaBotVisionApp:
         return merged
 
     def _build_cube_obstacle_mask(self, layers: Dict, img_shape: Tuple[int, int]) -> Optional[np.ndarray]:
-        """
-        Build a mask of all cube 'solid' detections (3D obstacles).
-        Excludes the currently selected target's cube.
-        Used for two-pass A* planning.
-        """
         ppc = max(self.perception.px_per_cm, 0.01)
         mask = np.zeros(img_shape[:2], dtype=np.uint8)
         has_any = False
 
         for name, layer_mask in layers.items():
-            if 'solid' not in name or layer_mask is None:
-                continue
+            if 'solid' not in name or layer_mask is None: continue
             m = layer_mask if layer_mask.dtype == np.uint8 else layer_mask.astype(np.uint8)
             if m.shape[:2] != img_shape[:2]:
                 m = cv2.resize(m, (img_shape[1], img_shape[0]), interpolation=cv2.INTER_NEAREST)
             mask = cv2.bitwise_or(mask, m)
-            if np.any(m > 0):
-                has_any = True
+            if np.any(m > 0): has_any = True
 
         if not has_any:
             self._cube_obstacle_mask = None
             return None
 
-        # Exclude the selected target's region so we can actually reach it
         sel = self._selected_target()
         if sel is not None and sel.kind == 'cube' and sel.corners is not None:
             pts = np.array([[int(c[0]*ppc), int(c[1]*ppc)] for c in sel.corners], np.int32)
-            # Dilate the exclusion slightly to ensure the approach path is clear
             excl = np.zeros_like(mask)
             cv2.fillPoly(excl, [pts], 255)
             k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
             excl = cv2.dilate(excl, k)
             mask = cv2.bitwise_and(mask, cv2.bitwise_not(excl))
 
-        # Dilate cube obstacles by robot radius + margin
         dil_px = max(1, int(self.CUBE_DILATION_CM * ppc))
         k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dil_px*2+1, dil_px*2+1))
         mask = cv2.dilate(mask, k)
@@ -504,7 +510,7 @@ class CargaBotVisionApp:
         self._cube_obstacle_mask = mask
         return mask
 
-    # ── Target detection (from v6) ────────────────────────────────────────────
+    # ── Target detection ──────────────────────────────────────────────────────
 
     def _detect_targets(self, layers: Dict) -> List[Target]:
         ppc = max(self.perception.px_per_cm, 0.01)
@@ -549,12 +555,25 @@ class CargaBotVisionApp:
             while nxt in used: nxt += 1
             nt.id = nxt; used.add(nxt)
 
-    # ── Approach (from v6) ────────────────────────────────────────────────────
+    # ── Approach (kind-aware) ─────────────────────────────────────────────────
 
     def _compute_approach_pose(self, target: Target,
                                 claudio_pos: Tuple[float, float]
                                 ) -> Optional[Tuple[float, float, float]]:
         cx, cy = target.center
+
+        # ── ZONES: go INTO the center, heading toward it ──────────────────────
+        if target.kind == 'zone':
+            dx = cx - claudio_pos[0]
+            dy = cy - claudio_pos[1]
+            # If Claudio is already at the center, default heading = 0
+            if math.hypot(dx, dy) < 1e-3:
+                ah = 0.0
+            else:
+                ah = math.atan2(dy, dx)
+            return (cx, cy, ah)
+
+        # ── CUBES: stand off perpendicular to closest accessible face ────────
         corners = target.corners
         standoff = self.CLAUDIO_HALF_LENGTH_CM + self.APPROACH_MARGIN_CM
         best = None; best_s = float('-inf')
@@ -589,41 +608,37 @@ class CargaBotVisionApp:
         self._locked_approach = ap
         self._locked_target_center = target.center
         self.selected_target_id = tid
+        self._selected_kind = target.kind
         self.goal_cm = (ap[0], ap[1])
         self.goal_heading = ap[2]
         self._in_final_approach = False
+        self._in_intercept = False
         target.approach_pose = ap
-        print(f"[T] #{tid} LOCKED approach=({ap[0]:.1f},{ap[1]:.1f}) hdg={math.degrees(ap[2]):.1f}")
+        kind_str = "ZONE-CENTER" if target.kind == 'zone' else "CUBE-FACE"
+        print(f"[T] #{tid} LOCKED ({kind_str}) approach=({ap[0]:.1f},{ap[1]:.1f}) "
+              f"hdg={math.degrees(ap[2]):.1f}")
         self._plan()
 
     def _selected_target(self) -> Optional[Target]:
         if self.selected_target_id is None: return None
         return next((t for t in self.targets if t.id == self.selected_target_id), None)
 
-    # ── Multi-point front-line (NEW v7) ───────────────────────────────────────
+    # ── Multi-point front-line ────────────────────────────────────────────────
 
     def _front_line_points(self, pose) -> List[Tuple[float, float]]:
-        """
-        Returns 3 points along Claudio's front edge:
-          center, left-quarter, right-quarter.
-        """
         rx, ry, yaw = pose
         cos_y = math.cos(yaw); sin_y = math.sin(yaw)
-        # Forward vector (along heading)
         fx = self.CLAUDIO_HALF_LENGTH_CM * cos_y
         fy = self.CLAUDIO_HALF_LENGTH_CM * sin_y
-        # Lateral vector (perpendicular, half-width * 0.5 for quarter points)
         quarter_w = self.CLAUDIO_HALF_WIDTH_CM * 0.5
         lx = -quarter_w * sin_y
         ly =  quarter_w * cos_y
-
         center = (rx + fx, ry + fy)
         left   = (rx + fx + lx, ry + fy + ly)
         right  = (rx + fx - lx, ry + fy - ly)
         return [center, left, right]
 
     def _front_line_midpoint(self, pose):
-        """Legacy: single center point for compatibility."""
         return self._front_line_points(pose)[0]
 
     @staticmethod
@@ -642,10 +657,11 @@ class CargaBotVisionApp:
             if d < best: best = d
         return best
 
-    def _check_front_line_aligned(self, pose, target_or_approach) -> Tuple[bool, float]:
+    def _check_front_line_aligned(self, pose, target_or_approach,
+                                   threshold_cm: float) -> Tuple[bool, float]:
+        """Returns (all_within_threshold, max_distance)."""
         pts = self._front_line_points(pose)
         sel = self._selected_target()
-
         distances = []
         for pt in pts:
             if sel is not None:
@@ -654,15 +670,13 @@ class CargaBotVisionApp:
                 ax, ay = target_or_approach[:2]
                 d = math.hypot(pt[0] - ax, pt[1] - ay) - self.CLAUDIO_HALF_LENGTH_CM
             distances.append(d)
-
         max_d = max(distances)
-        all_aligned = all(d < self.FRONT_LINE_REACH_CM for d in distances)
+        all_aligned = all(d < threshold_cm for d in distances)
         return all_aligned, max_d
 
-    # ── Planning (TWO-PASS A* — NEW v7) ───────────────────────────────────────
+    # ── Planning (two-pass A*) ────────────────────────────────────────────────
 
     def _find_free(self, x, y, cost_map=None):
-        """Find nearest free cell. Uses provided cost_map or navigator's default."""
         cm = cost_map if cost_map is not None else self.navigator.cost_map
         gx, gy = self.navigator.cm_to_grid(x, y)
         if cm[gy, gx] == 0: return (x, y)
@@ -679,14 +693,9 @@ class CargaBotVisionApp:
     def _plan(self):
         pose = self.perception.robot_pose_cm
         if not (pose and self.goal_cm and self._cost_ready): return
-
-        # ── Pass 1: Try planning with cubes as obstacles ──────────────────────
         path = self._plan_with_cubes(pose)
-
-        # ── Pass 2: Fallback to normal costmap ────────────────────────────────
         if not path:
             path = self._plan_normal(pose)
-
         if path:
             self.active_path = path
             self._path_arr = np.array(path, dtype=np.float64)
@@ -696,26 +705,17 @@ class CargaBotVisionApp:
             print(f"[A*] sin ruta (ambos passes fallaron)")
 
     def _plan_with_cubes(self, pose) -> List[Tuple[float, float]]:
-        """Pass 1: costmap with cube solids merged in as obstacles."""
-        if self._cube_obstacle_mask is None:
-            return []  # no cubes detected, skip to pass 2
-
-        # Merge cube mask into base obstacle mask
+        if self._cube_obstacle_mask is None: return []
         base_obs = self._layers_cache.get('obstacles')
-        if base_obs is None:
-            return []
-
+        if base_obs is None: return []
         base = base_obs if base_obs.dtype == np.uint8 else base_obs.astype(np.uint8)
         cube_m = self._cube_obstacle_mask
         if cube_m.shape != base.shape:
             cube_m = cv2.resize(cube_m, (base.shape[1], base.shape[0]),
                                 interpolation=cv2.INTER_NEAREST)
         merged = cv2.bitwise_or(base, cube_m)
-
-        # Generate temporary costmap
         old_cost = self.navigator.cost_map.copy()
         self.navigator.generate_cost_map(merged)
-
         start = self._find_free(pose[0], pose[1])
         goal = self._find_free(self.goal_cm[0], self.goal_cm[1])
         path = []
@@ -724,16 +724,11 @@ class CargaBotVisionApp:
             if path:
                 self.start_cm = start
                 print(f"[A*] Pass 1 (cube-aware): {len(path)} nodos")
-
-        # Restore original costmap (pass 2 or tracking needs it)
         self.navigator.cost_map = old_cost
-        # Regenerate from base obstacles so tracking uses the normal map
         self.navigator.generate_cost_map(base_obs)
-
         return path
 
     def _plan_normal(self, pose) -> List[Tuple[float, float]]:
-        """Pass 2: normal costmap (cubes ignored)."""
         start = self._find_free(pose[0], pose[1])
         if start is None: return []
         self.start_cm = start
@@ -748,7 +743,7 @@ class CargaBotVisionApp:
         return path
 
     def _auto_replan(self, rx, ry):
-        if self._in_final_approach: return
+        if self._in_final_approach or self._in_intercept: return
         now = time.time()
         if now - self._last_replan < self.REPLAN_COOLDOWN: return
         if not self.goal_cm: return
@@ -765,7 +760,7 @@ class CargaBotVisionApp:
             self._last_replan = now
             if self.ros: self.ros.publish_path(path)
 
-    # ── Tracking + motion (from v6, with multi-point alignment) ───────────────
+    # ── Tracking + motion ─────────────────────────────────────────────────────
 
     def _update_tracking(self) -> Optional[Tuple]:
         pose = self.perception.robot_pose_cm
@@ -773,40 +768,66 @@ class CargaBotVisionApp:
         if pose is None or pa is None or len(pa) < 2: return None
         rx, ry, yaw = pose
 
-        # ── Multi-point front-line check (NEW v7) ────────────────────────────
+        # ── Arrival check (kind-aware) ────────────────────────────────────────
         if self._locked_approach is not None:
             sel = self._selected_target()
-            if sel is not None:
-                aligned, max_d = self._check_front_line_aligned(pose, sel)
+            kind = self._selected_kind  # cached at select time, survives target loss
+
+            # ZONES: Euclidean to zone center
+            if kind == 'zone':
+                d_center = math.hypot(rx - self._locked_approach[0],
+                                      ry - self._locked_approach[1])
+                if d_center < self.ZONE_REACH_CM:
+                    print(f">>> ZONE REACHED (d={d_center:.1f}cm) <<<")
+                    self._clear_nav()
+                    self._hard_stop()
+                    return None
+                final_radius = self.FINAL_APPROACH_ZONE_CM
             else:
-                aligned, max_d = self._check_front_line_aligned(pose, self._locked_approach)
+                # CUBES: 3-point front-line at REACH threshold = contact/done
+                if sel is not None:
+                    aligned, max_d = self._check_front_line_aligned(
+                        pose, sel, self.FRONT_LINE_REACH_CM)
+                else:
+                    aligned, max_d = self._check_front_line_aligned(
+                        pose, self._locked_approach, self.FRONT_LINE_REACH_CM)
+                if aligned:
+                    print(f">>> CUBE CONTACT — 3 front points within "
+                          f"{self.FRONT_LINE_REACH_CM}cm (max={max_d:.1f}cm) <<<")
+                    self._clear_nav()
+                    self._hard_stop()
+                    return None
+                final_radius = self.FINAL_APPROACH_CM
 
-            if aligned:
-                print(f">>> ALIGNED — all 3 front points within {self.FRONT_LINE_REACH_CM}cm "
-                      f"(max_d={max_d:.1f}cm) <<<")
-                self._clear_nav()
-                if self.ros: self.ros.send_stop()
-                return None
-
-            # Final approach check
+            # Final approach entry
             d_to_ap = math.hypot(rx - self._locked_approach[0],
                                  ry - self._locked_approach[1])
-            if d_to_ap < self.FINAL_APPROACH_CM and not self._in_final_approach:
+            if d_to_ap < final_radius and not self._in_final_approach:
                 self._in_final_approach = True
-                print(f"[FA] Entrando final approach d={d_to_ap:.1f}cm")
+                print(f"[FA] Entrando final approach d={d_to_ap:.1f}cm (kind={kind})")
 
-        # ── Vectorized closest point ──────────────────────────────────────────
+            # ── CUBE INTERCEPT: commit when 3 front points are within wider window
+            if kind == 'cube' and self._in_final_approach and not self._in_intercept:
+                if sel is not None:
+                    in_window, _ = self._check_front_line_aligned(
+                        pose, sel, self.FRONT_LINE_INTERCEPT_CM)
+                    if in_window:
+                        self._in_intercept = True
+                        print(f"[INTERCEPT] Commit-to-intercept engaged (3 front pts "
+                              f"< {self.FRONT_LINE_INTERCEPT_CM}cm)")
+
+        # ── Vectorized closest path point ────────────────────────────────────
         dists = np.hypot(pa[:, 0] - rx, pa[:, 1] - ry)
         idx = int(np.argmin(dists))
         self.deviation_cm = float(dists[idx])
         self.progress = idx / max(len(pa) - 1, 1)
 
-        # ── Euclidean fallback (right-click) ──────────────────────────────────
+        # ── Euclidean fallback (right-click goals) ───────────────────────────
         if self._locked_approach is None:
             gx, gy = pa[-1]
             if math.hypot(rx - gx, ry - gy) < self.GOAL_REACHED_CM:
                 self._clear_nav()
-                if self.ros: self.ros.send_stop()
+                self._hard_stop()
                 return None
 
         # ── Replan si desviado ────────────────────────────────────────────────
@@ -817,7 +838,7 @@ class CargaBotVisionApp:
             dists = np.hypot(pa[:, 0] - rx, pa[:, 1] - ry)
             idx = int(np.argmin(dists))
 
-        # ── Vectorized lookahead ──────────────────────────────────────────────
+        # ── Lookahead ─────────────────────────────────────────────────────────
         tail = pa[idx:]
         if len(tail) < 2:
             lh = tuple(pa[-1])
@@ -832,8 +853,33 @@ class CargaBotVisionApp:
         return lh
 
     def _send_motion(self, target_cm, pose):
-        if not self.ros or self.ros.is_mc_busy(): return
+        # ── Guards: bridge, mc-busy, manual mode, stop cooldown ──────────────
+        if not self.ros: return
+        if self._manual_mode: return
+        if time.time() < self._stop_until: return
+        if self.ros.is_mc_busy(): return
+
         rx, ry, yaw = pose
+
+        # ── INTERCEPT phase (cubes only): drive along LOCKED heading ─────────
+        if self._in_intercept and self._locked_approach is not None:
+            target_heading = self._locked_approach[2]
+            delta = (target_heading - yaw + math.pi) % (2*math.pi) - math.pi
+            delta_deg = math.degrees(delta)
+
+            # Wide rotation tolerance — only correct gross misalignment
+            if abs(delta_deg) > self.INTERCEPT_ROT_TOL_DEG:
+                self.ros.send_mc_command({"cmd": "rotate", "angle": round(delta_deg, 1)})
+                return
+
+            # Step forward — small, gentle pushes
+            self.ros.send_mc_command({
+                "cmd": "move",
+                "distance": round(self.INTERCEPT_MOVE_CAP_CM / 100.0, 4)
+            })
+            return
+
+        # ── Lookahead-based motion (normal + final approach) ─────────────────
         dx = target_cm[0] - rx; dy = target_cm[1] - ry
         ta = math.atan2(dy, dx)
         delta = (ta - yaw + math.pi) % (2*math.pi) - math.pi
@@ -850,6 +896,7 @@ class CargaBotVisionApp:
                 self.ros.send_mc_command({"cmd": "move", "distance": round(step / 100.0, 4)})
             return
 
+        # Normal mode
         if abs(delta_deg) > self.ROTATE_THRESHOLD_DEG:
             self.ros.send_mc_command({"cmd": "rotate", "angle": round(delta_deg, 1)})
             return
@@ -861,11 +908,26 @@ class CargaBotVisionApp:
                 cap = self.LOOKAHEAD_CM
             self.ros.send_mc_command({"cmd": "move", "distance": round(min(dist_cm, cap) / 100.0, 4)})
 
+    # ── Stop helpers (NEW v7.1) ───────────────────────────────────────────────
+
+    def _hard_stop(self):
+        """
+        Robust stop: publishes multiple stop commands and engages a cooldown
+        so _send_motion() is suppressed for STOP_COOLDOWN_SEC.
+        """
+        if self.ros:
+            self.ros.send_stop()
+            self.ros.send_stop()  # belt + suspenders
+        self._stop_until = time.time() + self.STOP_COOLDOWN_SEC
+
     def _clear_nav(self):
         self.active_path = []; self._path_arr = None
         self.selected_target_id = None
+        self._selected_kind = None
         self._locked_approach = None; self._locked_target_center = None
-        self.goal_heading = None; self._in_final_approach = False
+        self.goal_heading = None
+        self._in_final_approach = False
+        self._in_intercept = False
 
     # ── Frame pipeline ────────────────────────────────────────────────────────
 
@@ -885,8 +947,10 @@ class CargaBotVisionApp:
             if eg:
                 self.goal_cm = eg; self.goal_heading = None
                 self.selected_target_id = None
+                self._selected_kind = None
                 self._locked_approach = None
                 self._in_final_approach = False
+                self._in_intercept = False
                 self._plan()
 
         do_layers = (self._frame_count % self.LAYER_INTERVAL == 0) or not self._cost_ready
@@ -901,9 +965,7 @@ class CargaBotVisionApp:
                 self.navigator.generate_cost_map(obs)
                 self._cost_ready = True
             self.targets = self._detect_targets(layers)
-            # Build cube obstacle mask for two-pass planning
             self._build_cube_obstacle_mask(layers, warped.shape[:2])
-
             sel = self._selected_target()
             if sel is not None and self._locked_approach is not None:
                 sel.approach_pose = self._locked_approach
@@ -967,10 +1029,8 @@ class CargaBotVisionApp:
             _tint_mask(img, self._wall_resized > 0, (0, 0, 180), 102)
 
     def _draw_ignore_zones(self, img, ppc):
-        """Draw ignore zones as semi-transparent gray circles with X."""
         for cx, cy, r in self._ignore_zones:
             cpx = int(cx * ppc); cpy = int(cy * ppc); rpx = int(r * ppc)
-            # Semi-transparent fill
             y1 = max(0, cpy - rpx); y2 = min(img.shape[0], cpy + rpx)
             x1 = max(0, cpx - rpx); x2 = min(img.shape[1], cpx + rpx)
             if x2 > x1 and y2 > y1:
@@ -979,7 +1039,6 @@ class CargaBotVisionApp:
                 cv2.circle(m, (cpx - x1, cpy - y1), rpx, 255, -1)
                 _tint_mask(roi, m > 0, (80, 80, 80), 140)
             cv2.circle(img, (cpx, cpy), rpx, _GY, 2)
-            # X mark
             d = int(rpx * 0.5)
             cv2.line(img, (cpx-d, cpy-d), (cpx+d, cpy+d), _RD, 2)
             cv2.line(img, (cpx-d, cpy+d), (cpx+d, cpy-d), _RD, 2)
@@ -1000,7 +1059,8 @@ class CargaBotVisionApp:
                 _tint_mask(roi, m > 0, col, 76 if t.kind == 'cube' else 46)
             cv2.polylines(img, [cp], True, _BK, thick+2)
             cv2.polylines(img, [cp], True, col, thick)
-            if is_sel and self._locked_approach is not None:
+            # Approach face highlight (cubes only — zones don't have a "face")
+            if is_sel and self._locked_approach is not None and t.kind == 'cube':
                 ax, ay, _ = self._locked_approach
                 bi = 0; bd = 1e9
                 for i in range(4):
@@ -1025,7 +1085,8 @@ class CargaBotVisionApp:
                 cv2.arrowedLine(img, (apx, apy),
                                 (int(apx+al*math.cos(ah)), int(apy+al*math.sin(ah))),
                                 _OR, 2, tipLength=0.3)
-                _txt_fast(img, "LOCK", (apx+8, apy-6), 0.4, _OR, 1)
+                label = "ZONE-CTR" if t.kind == 'zone' else "LOCK"
+                _txt_fast(img, label, (apx+8, apy-6), 0.4, _OR, 1)
 
     def _draw_path_fast(self, img, ppc):
         pa = self._path_arr
@@ -1061,9 +1122,12 @@ class CargaBotVisionApp:
                 roi = img[yn:yx, xn:xx]; lc = c - np.array([xn, yn])
                 m = np.zeros(roi.shape[:2], dtype=np.uint8)
                 cv2.fillPoly(m, [lc], 255)
-                _tint_mask(roi, m > 0, (40, 40, 40), 128)
+                # Tint orange-tinted when in manual mode for visual feedback
+                tint_col = (40, 80, 120) if self._manual_mode else (40, 40, 40)
+                _tint_mask(roi, m > 0, tint_col, 128)
+            border_col = _OR if self._manual_mode else _CY
             cv2.polylines(img, [c], True, _BK, 3)
-            cv2.polylines(img, [c], True, _CY, 1)
+            cv2.polylines(img, [c], True, border_col, 1)
         else:
             r = max(10, int(ARUCO_REAL_CM * ppc * 0.65))
             cv2.rectangle(img, (rx-r, ry-r), (rx+r, ry+r), _BK, -1)
@@ -1078,7 +1142,7 @@ class CargaBotVisionApp:
         al = int(ARUCO_REAL_CM * ppc * 0.9)
         cv2.arrowedLine(img, (rx, ry), (int(rx+al*cy_), int(ry+al*sy_)), _CY, 2, tipLength=0.3)
 
-        # Front-line 3 points (NEW v7 — visual)
+        # Front-line 3 points
         fl_pts = self._front_line_points(pose)
         for i, pt in enumerate(fl_pts):
             px = int(pt[0]*ppc); py = int(pt[1]*ppc)
@@ -1091,14 +1155,18 @@ class CargaBotVisionApp:
         _txt_fast(img, f"{math.degrees(yaw)%360:.0f}",
                   (rx + int(ARUCO_REAL_CM*ppc*0.8), ry-3), 0.45, _YL, 1)
 
-        if lookahead:
+        if lookahead and not self._in_intercept:
             lx = int(lookahead[0]*ppc); ly = int(lookahead[1]*ppc)
             _dashed(img, (rx, ry), (lx, ly), _GR, 1)
             cv2.circle(img, (lx, ly), 7, _GR, 2)
         if self.goal_cm and self._locked_approach is None:
             gx = int(self.goal_cm[0]*ppc); gy = int(self.goal_cm[1]*ppc)
             cv2.drawMarker(img, (gx, gy), _MG, cv2.MARKER_TILTED_CROSS, 20, 2)
-        if self._in_final_approach:
+
+        # Phase indicators
+        if self._in_intercept:
+            _txt_fast(img, "INTERCEPT", (rx-50, ry+int(ARUCO_REAL_CM*ppc*1.2)), 0.5, _RD, 2)
+        elif self._in_final_approach:
             _txt_fast(img, "FINAL APPROACH", (rx-60, ry+int(ARUCO_REAL_CM*ppc*1.2)), 0.5, _OR, 2)
 
     def _draw_heading(self, img, ppc):
@@ -1115,6 +1183,12 @@ class CargaBotVisionApp:
             _txt_fast(img, lab, (int(rx+(cr+10)*math.cos(a))-4,
                                  int(ry+(cr+10)*math.sin(a))+4), 0.4, _GY, 1)
         cv2.line(img, (rx, ry), (int(rx+cr*math.cos(yaw)), int(ry+cr*math.sin(yaw))), _CY, 2)
+        # Locked approach heading (cyan dashed)
+        if self._locked_approach is not None:
+            lah = self._locked_approach[2]
+            _dashed(img, (rx, ry),
+                    (int(rx+cr*math.cos(lah)), int(ry+cr*math.sin(lah))),
+                    _OR, 1, dash=6, gap=4)
 
     def _draw_debug(self, img, ppc):
         raw = self._layers_cache.get('obstacles_raw')
@@ -1131,8 +1205,7 @@ class CargaBotVisionApp:
             y0 = h - 2*th - 12
             img[y0:y0+th, w-tw-4:w-4] = eb
             _txt_fast(img, "EXCL", (w-tw-4, y0-4), 0.4, _CY)
-        # Cube obstacle mask debug
-        if self._cube_obstacle_mask is not None and self._debug_mode:
+        if self._cube_obstacle_mask is not None:
             h, w = img.shape[:2]; tw = w//5; th = h//5
             cm = cv2.resize(self._cube_obstacle_mask, (tw, th), interpolation=cv2.INTER_NEAREST)
             cb = cv2.cvtColor(cm, cv2.COLOR_GRAY2BGR); cb[cm > 0] = (0, 140, 255)
@@ -1153,11 +1226,18 @@ class CargaBotVisionApp:
         if self.ros:
             busy = self.ros.is_mc_busy()
             L.append(f"MC:{'BUSY' if busy else 'IDLE'}"); C_.append(_OR if busy else _GR)
+        if self._manual_mode:
+            L.append(">> MANUAL MODE (teleop) <<"); C_.append(_OR)
+        if time.time() < self._stop_until:
+            remaining = self._stop_until - time.time()
+            L.append(f"STOP cooldown {remaining:.1f}s"); C_.append(_RD)
         if self.active_path:
             L.append(f"Path:{len(self.active_path)} {self.progress*100:.0f}%"); C_.append(_W)
             ok = self.deviation_cm <= self.DEVIATION_THRESHOLD
             L.append(f"Dev:{self.deviation_cm:.0f}cm{'!' if not ok else ''}"); C_.append(_GR if ok else _RD)
-        if self._in_final_approach:
+        if self._in_intercept:
+            L.append(">> INTERCEPT <<"); C_.append(_RD)
+        elif self._in_final_approach:
             L.append(">> FINAL APPROACH <<"); C_.append(_OR)
         if self._ignore_zones:
             L.append(f"Ignore zones: {len(self._ignore_zones)}"); C_.append(_GY)
@@ -1209,37 +1289,68 @@ class CargaBotVisionApp:
 
     def _key(self, k: int) -> bool:
         if k in (27, ord('q'), ord('Q')): return False
+
         if k in (ord('r'), ord('R')):
             self._clear_nav()
             self.start_cm = self.goal_cm = None
             self.robot_trail.clear(); self.replan_count = 0
-            if self.ros: self.ros.send_stop()
+            self._hard_stop()
+            print("[R] Misión cancelada — robot detenido")
+
         elif k in (ord('p'), ord('P')):
-            if self.selected_target_id is not None:
+            if self._manual_mode:
+                print("[M] Manual mode active — ignoring plan. Press M to resume auto.")
+            elif self.selected_target_id is not None:
                 self._select_target(self.selected_target_id)
-            else: self._plan()
+            else:
+                self._plan()
+
         elif k in (ord('d'), ord('D')):
             self._debug_mode = not self._debug_mode
+
         elif k in (ord('h'), ord('H')):
             self._heading_debug = not self._heading_debug
+
         elif k in (ord('s'), ord('S')):
-            if self.ros: self.ros.send_stop()
+            self._hard_stop()
+            print("[S] Stop manual")
+
         elif k in (ord('e'), ord('E')):
             self._ignore_mode = not self._ignore_mode
             print(f"Ignore mode: {'ON — right-click to place zones' if self._ignore_mode else 'OFF'}")
+
         elif k in (ord('x'), ord('X')):
             n = len(self._ignore_zones)
             self._ignore_zones.clear()
             print(f"[IGN] Cleared {n} ignore zones")
+
+        elif k in (ord('m'), ord('M')):
+            self._manual_mode = not self._manual_mode
+            if self._manual_mode:
+                # Entering manual: hard stop the auto motion, keep mission state intact
+                self._hard_stop()
+                print("[M] MANUAL MODE ON — teleop active, vision suspended.")
+                print("    Use teleop terminal (WASD). Press M to resume auto.")
+            else:
+                # Exiting manual: clear cooldown so auto motion resumes immediately
+                self._stop_until = 0.0
+                print("[M] MANUAL MODE OFF — vision auto resumed.")
+                if self.active_path:
+                    print("    Active path will resume; deviation check may auto-replan.")
+
         elif ord('1') <= k <= ord('9'):
-            self._select_target(k - ord('0'))
+            if self._manual_mode:
+                print("[M] Manual mode active — target select blocked. Press M to resume auto.")
+            else:
+                self._select_target(k - ord('0'))
+
         return True
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    ap = argparse.ArgumentParser(description="CargaBot Vision v7")
+    ap = argparse.ArgumentParser(description="CargaBot Vision v7.1")
     ap.add_argument('--params',       default='resource/camera_params.yaml')
     ap.add_argument('--homography',   default='resource/homography_retry.yaml')
     ap.add_argument('--image',        default='')

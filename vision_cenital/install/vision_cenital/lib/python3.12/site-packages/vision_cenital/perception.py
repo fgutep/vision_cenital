@@ -1,23 +1,32 @@
 #!/usr/bin/env python3
 """
-perception.py v7.1
-===================
-Fix v7.1 (vs v7):
-  - Asymmetric hitbox: robot_hitbox_front_cm + robot_hitbox_back_cm
-    (ArUco marker is offset, not centered on robot)
-  - Center offset calculation: offset_cm moves the bbox center from ArUco to robot center
-  - Improved exclusion mask with padding and dilation to eliminate false positives
-  - Updated inject_pose_from_odom to account for ArUco offset
-  - All rotated hitbox logic preserved from v7
+perception.py v8
+=================
+Fix v8 (vs v7.1):
+  - Color ranges: separate strict (cubes) + loose (tape/zones) bands per color.
+  - Red: dual hue arcs around 0 and 180, lower-saturation loose band for tape.
+  - Green: extended down to H=30 to catch yellow-green tape; loose S floor.
+  - Blue: tightened to deep navy (H 100-130, S>=90, V<=200) to avoid
+    teal/cyan overlap with the green cube.
+  - Temporal smoothing: previous-frame mask OR with current, then eroded
+    when stored — prevents single-frame detection flicker.
+  - Cube vs zone discrimination uses CENTER FILL (not bbox fill):
+    cubes are densely filled in the middle, zones (even striped) have
+    visible gaps near the center. This fixes the red-zone-as-red-cube
+    misclassification caused by diagonal stripes inflating bbox fill.
 
-Fix v7 (vs v6):
-  - ROBOT_ARUCO_ID changed to 0
-  - robot_bbox_px is now a rotated hitbox (cx, cy, hw, hh, yaw)
-    instead of axis-aligned (x, y, w, h)
-  - _robot_exclusion_mask draws a rotated filled polygon via fillPoly
-  - Configurable hitbox half-dimensions via robot_hitbox_hw_cm
+Fix v7.1 (preserved):
+  - Asymmetric hitbox: robot_hitbox_front_cm + robot_hitbox_back_cm
+  - Center offset calculation: offset_cm moves bbox center from ArUco to robot center
+  - Improved exclusion mask with padding and dilation
+  - Updated inject_pose_from_odom to account for ArUco offset
+
+Fix v7 (preserved):
+  - ROBOT_ARUCO_ID = 0
+  - robot_bbox_px is rotated hitbox (cx, cy, hw, hh, yaw)
+  - _robot_exclusion_mask draws rotated filled polygon
   - get_robot_hitbox_corners_px() for app-layer rotated rendering
-  - Two-stage detection and bbox persistence from v6 intact
+  - Two-stage detection and bbox persistence
 """
 
 import cv2
@@ -34,8 +43,8 @@ OBSTACLE_DILATION_CM: float = 7.0
 
 PROC_SCALE:          float = 0.5
 COSTMAP_SKIP_FRAMES: int   = 4
-ARUCO_DETECT_W:      int   = 1024   # ancho al que se reduce para detectar ArUco
-BBOX_PERSIST_FRAMES: int   = 15     # frames que el bbox persiste sin detección
+ARUCO_DETECT_W:      int   = 1024
+BBOX_PERSIST_FRAMES: int   = 15
 
 
 class OverheadPerception:
@@ -59,7 +68,7 @@ class OverheadPerception:
             self.H_scaled[0] *= self.px_per_cm
             self.H_scaled[1] *= self.px_per_cm
 
-        # ArUco
+        # ── ArUco ─────────────────────────────────────────────────────────────
         if hasattr(cv2.aruco, 'Dictionary_get'):
             self.aruco_dict   = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
             self.aruco_params = cv2.aruco.DetectorParameters_create()
@@ -72,14 +81,13 @@ class OverheadPerception:
                 self.aruco_detector = cv2.aruco.ArucoDetector(
                     self.aruco_dict, self.aruco_params)
 
-        # Parámetros ArUco más permisivos para imagen cenital
+        # Parametros ArUco mas permisivos para imagen cenital
         if hasattr(self.aruco_params, 'adaptiveThreshWinSizeMin'):
             self.aruco_params.adaptiveThreshWinSizeMin  = 3
             self.aruco_params.adaptiveThreshWinSizeMax  = 53
             self.aruco_params.adaptiveThreshWinSizeStep = 10
             self.aruco_params.minMarkerPerimeterRate     = 0.02
             self.aruco_params.maxMarkerPerimeterRate     = 0.5
-            # Muy permisivo: esquinas redondeadas por warpPerspective
             self.aruco_params.polygonalApproxAccuracyRate = 0.10
             self.aruco_params.cornerRefinementMethod     = \
                 getattr(cv2.aruco, 'CORNER_REFINE_SUBPIX',
@@ -90,25 +98,19 @@ class OverheadPerception:
             self.aruco_params.errorCorrectionRate = 1.0
 
         self.robot_pose_cm:  Optional[Tuple[float, float, float]] = None
-        # Rotated hitbox: (center_x_px, center_y_px, half_w_px, half_h_px, yaw_rad)
         self.robot_bbox_px:  Optional[Tuple[float, float, float, float, float]] = None
-        self._bbox_age:      int = 0  # frames since last successful detection
+        self._bbox_age:      int = 0
 
-        # Robot hitbox dimensions with offset ArUco (all in cm)
-        # ArUco is NOT centered - it's closer to the back of the robot
-        self.robot_hitbox_front_cm: float = 32   # distance from ArUco to robot front
-        self.robot_hitbox_back_cm: float = 11.0     # distance from ArUco to robot back
-        self.robot_hitbox_side_cm: float = 12.0    # half-width (side to side)
+        # Robot hitbox dimensions (cm). ArUco is NOT centered on the robot.
+        self.robot_hitbox_front_cm: float = 32.0
+        self.robot_hitbox_back_cm:  float = 11.0
+        self.robot_hitbox_side_cm:  float = 12.0
 
-        # Precompute for compatibility with existing code
         self.robot_hitbox_hw_cm: Tuple[float, float] = (
-            (self.robot_hitbox_front_cm + self.robot_hitbox_back_cm) / 2.0,  # half-length
-            self.robot_hitbox_side_cm  # half-width
-        )
-        # Offset from ArUco center to robot geometric center (positive = forward)
+            (self.robot_hitbox_front_cm + self.robot_hitbox_back_cm) / 2.0,
+            self.robot_hitbox_side_cm)
         self.robot_hitbox_offset_cm: float = (
-            self.robot_hitbox_front_cm - self.robot_hitbox_back_cm
-        ) / 2.0
+            self.robot_hitbox_front_cm - self.robot_hitbox_back_cm) / 2.0
 
         dil_px = max(1, int(OBSTACLE_DILATION_CM * self.px_per_cm * PROC_SCALE))
         self._dilate_kernel = cv2.getStructuringElement(
@@ -116,9 +118,12 @@ class OverheadPerception:
 
         self._layers_cache:  Optional[Dict[str, np.ndarray]] = None
         self._costmap_frame: int = 0
+        self._last_warped:   Optional[np.ndarray] = None
 
-        # Cache for warp_to_overhead result (reused by fallback detection)
-        self._last_warped: Optional[np.ndarray] = None
+        # Temporal smoothing cache (NEW v8): previous-frame color masks
+        self._prev_color_masks: Dict[str, np.ndarray] = {}
+
+    # ── Loaders ───────────────────────────────────────────────────────────────
 
     @staticmethod
     def _load_intrinsics(path):
@@ -149,46 +154,30 @@ class OverheadPerception:
     # ── ArUco helpers ─────────────────────────────────────────────────────────
 
     def _detect_aruco_on(self, gray: np.ndarray, preprocess: bool = False):
-        """
-        Run ArUco detection on a grayscale image.
-        Returns (corners, ids) or (None, None).
-        """
         if preprocess:
             gray = self._preprocess_for_aruco(gray)
-
         if self.has_new_api:
             corners, ids, _ = self.aruco_detector.detectMarkers(gray)
         else:
             corners, ids, _ = cv2.aruco.detectMarkers(
                 gray, self.aruco_dict, parameters=self.aruco_params)
-
         if ids is None or len(ids) == 0:
             return None, None
         return corners, ids
 
     def _pick_robot_marker(self, ids):
-        """Return index of preferred marker (ID 0), or 0 as fallback."""
         for i, mid in enumerate(ids.flatten()):
             if mid == ROBOT_ARUCO_ID:
                 return i
         return 0
 
     def _corners_to_pose_and_bbox(self, corners_px):
-        """
-        Given 4 corner points already in overhead pixel coordinates,
-        compute (x_cm, y_cm, yaw) and a rotated hitbox
-        (cx_px, cy_px, half_w_px, half_h_px, yaw).
-        
-        Accounts for ArUco offset: the marker is not centered on the robot.
-        """
         c = corners_px.reshape(4, 2)
         aruco_center_px = np.mean(c, axis=0)
 
-        # Compute yaw from marker orientation
-        fv   = ((c[0] + c[1]) / 2.0) - ((c[2] + c[3]) / 2.0)
-        yaw  = float(np.arctan2(fv[1], fv[0]) + np.pi / 2)
+        fv  = ((c[0] + c[1]) / 2.0) - ((c[2] + c[3]) / 2.0)
+        yaw = float(np.arctan2(fv[1], fv[0]) + np.pi / 2)
 
-        # Offset the robot center from ArUco center
         offset_cm = self.robot_hitbox_offset_cm
         robot_center_x = aruco_center_px[0] / self.px_per_cm + offset_cm * np.cos(yaw)
         robot_center_y = aruco_center_px[1] / self.px_per_cm + offset_cm * np.sin(yaw)
@@ -196,11 +185,9 @@ class OverheadPerception:
         x_cm = float(robot_center_x)
         y_cm = float(robot_center_y)
 
-        # Hitbox half-dimensions
         hw_px = self.robot_hitbox_hw_cm[0] * self.px_per_cm
         hh_px = self.robot_hitbox_hw_cm[1] * self.px_per_cm
 
-        # Store robot center (not ArUco center) for the bbox
         robot_cx_px = robot_center_x * self.px_per_cm
         robot_cy_px = robot_center_y * self.px_per_cm
 
@@ -211,12 +198,6 @@ class OverheadPerception:
 
     def detect_robot_pose(self, raw_frame: np.ndarray
                           ) -> Optional[Tuple[float, float, float]]:
-        """
-        Two-stage ArUco detection:
-          Stage 1: undistorted frame (sharp corners, perspective transform via H)
-          Stage 2: warped frame with CLAHE+sharpen (corners already in overhead px)
-        Falls back to stage 2 when stage 1 misses.
-        """
         if self.sim_mode:
             return None
 
@@ -228,20 +209,15 @@ class OverheadPerception:
         if pose is not None:
             return pose
 
-        # Both stages failed — age the bbox but keep it alive for a while
         self._bbox_age += 1
         if self._bbox_age > BBOX_PERSIST_FRAMES:
             self.robot_bbox_px = None
             self.robot_pose_cm = None
-        # else: keep last known bbox/pose so exclusion mask stays active
-
-        return self.robot_pose_cm  # may be stale but non-None
+        return self.robot_pose_cm
 
     def _detect_stage1_undistorted(self, raw_frame: np.ndarray
                                     ) -> Optional[Tuple[float, float, float]]:
-        """Stage 1: detect on undistorted (pre-warp) frame, project via H."""
-        undistorted = cv2.remap(raw_frame, self.mapx, self.mapy,
-                                cv2.INTER_LINEAR)
+        undistorted = cv2.remap(raw_frame, self.mapx, self.mapy, cv2.INTER_LINEAR)
 
         fh, fw = undistorted.shape[:2]
         if fw > ARUCO_DETECT_W:
@@ -261,11 +237,8 @@ class OverheadPerception:
             return None
 
         chosen_idx = self._pick_robot_marker(ids)
-
-        # Scale corners back to full-res undistorted coordinates
         c_und = corners[chosen_idx][0] / scale
 
-        # Project to overhead via H_scaled
         pts = np.array(c_und, dtype=np.float32).reshape(-1, 1, 2)
         pts_overhead = cv2.perspectiveTransform(pts, self.H_scaled)
 
@@ -276,18 +249,11 @@ class OverheadPerception:
         return pose
 
     def _detect_stage2_warped(self) -> Optional[Tuple[float, float, float]]:
-        """
-        Stage 2: detect directly on the warped (overhead) frame.
-        Uses CLAHE + unsharp mask to recover blurred corners.
-        Corners are already in overhead pixel coordinates — no H projection needed.
-        """
         warped = self._last_warped
         if warped is None:
             return None
 
         fh, fw = warped.shape[:2]
-
-        # Optionally downscale for speed (same logic as stage 1)
         if fw > ARUCO_DETECT_W:
             scale = ARUCO_DETECT_W / fw
             small = cv2.resize(warped,
@@ -298,19 +264,14 @@ class OverheadPerception:
             scale = 1.0
 
         small_gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-
-        # Detect with preprocessing (CLAHE + sharpen) — key for warped frame
         corners, ids = self._detect_aruco_on(small_gray, preprocess=True)
         if corners is None:
             return None
 
         chosen_idx = self._pick_robot_marker(ids)
-
-        # Corners are in small_gray coords → scale to full warped coords
         c_warped = corners[chosen_idx][0] / scale
 
-        pose, bbox = self._corners_to_pose_and_bbox(
-            c_warped.reshape(4, 2))
+        pose, bbox = self._corners_to_pose_and_bbox(c_warped.reshape(4, 2))
         self.robot_pose_cm = pose
         self.robot_bbox_px = bbox
         self._bbox_age = 0
@@ -320,15 +281,11 @@ class OverheadPerception:
 
     def inject_pose_from_odom(self, odom_x_m, odom_y_m, odom_yaw_rad,
                                frame_w_px=0, frame_h_px=0):
-        """
-        Inject pose from odometry, accounting for ArUco offset from robot center.
-        """
         x_cm = float(odom_x_m * 100.0)
         y_cm = float(odom_y_m * 100.0)
         yaw  = float(odom_yaw_rad)
         self.robot_pose_cm = (x_cm, y_cm, yaw)
 
-        # Offset from ArUco to robot center
         offset_cm = self.robot_hitbox_offset_cm
         cx_px = (x_cm + offset_cm * np.cos(yaw)) * self.px_per_cm
         cy_px = (y_cm + offset_cm * np.sin(yaw)) * self.px_per_cm
@@ -342,70 +299,48 @@ class OverheadPerception:
     # ── Exclusion mask ────────────────────────────────────────────────────────
 
     def _robot_exclusion_mask(self, shape):
-        """
-        Returns a mask covering the robot area as a rotated rectangle.
-        Uses persisted bbox even if detection missed this frame.
-        Includes padding and dilation to eliminate false positives under the robot.
-        """
         if self.robot_bbox_px is None:
             return None
 
         cx, cy, hw, hh, yaw = self.robot_bbox_px
         s = PROC_SCALE
 
-        # Scale to proc resolution with EXTRA padding to ensure coverage
-        padding_cm = 3.0  # Add 3cm padding around the robot
+        padding_cm = 3.0
         cx_s = cx * s
         cy_s = cy * s
         hw_s = (hw * s) + (padding_cm * self.px_per_cm * s)
         hh_s = (hh * s) + (padding_cm * self.px_per_cm * s)
 
-        # Expand more when bbox is aging (robot may have moved)
         if self._bbox_age > 0:
-            expand = self._bbox_age * 3.0 * s  # Increased from 2.0
+            expand = self._bbox_age * 3.0 * s
             hw_s += expand
             hh_s += expand
 
-        # Compute rotated rectangle corners
         cos_a = np.cos(yaw)
         sin_a = np.sin(yaw)
-
-        # Use the actual asymmetric corners
         local = np.array([
-            [ hw_s,  hh_s],   # front-right
-            [ hw_s, -hh_s],   # front-left
-            [-hw_s, -hh_s],   # back-left
-            [-hw_s,  hh_s],   # back-right
+            [ hw_s,  hh_s],
+            [ hw_s, -hh_s],
+            [-hw_s, -hh_s],
+            [-hw_s,  hh_s],
         ], dtype=np.float32)
-
         rot = np.array([[cos_a, -sin_a], [sin_a, cos_a]], dtype=np.float32)
         pts = (local @ rot.T) + np.array([cx_s, cy_s], dtype=np.float32)
         pts_int = pts.astype(np.int32)
 
         mask = np.zeros(shape[:2], dtype=np.uint8)
         cv2.fillPoly(mask, [pts_int], 255)
-
-        # Dilate the mask slightly to ensure no edge artifacts
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         mask = cv2.dilate(mask, kernel, iterations=1)
-
         return mask
 
     def get_robot_hitbox_corners_px(self):
-        """
-        Returns the 4 corners of the rotated hitbox in full-res overhead px.
-        Used by the app for rendering. Returns None if no bbox.
-        """
         if self.robot_bbox_px is None:
             return None
         cx, cy, hw, hh, yaw = self.robot_bbox_px
-        cos_a = np.cos(yaw)
-        sin_a = np.sin(yaw)
+        cos_a = np.cos(yaw); sin_a = np.sin(yaw)
         local = np.array([
-            [ hw,  hh],
-            [ hw, -hh],
-            [-hw, -hh],
-            [-hw,  hh],
+            [ hw,  hh], [ hw, -hh], [-hw, -hh], [-hw,  hh],
         ], dtype=np.float32)
         rot = np.array([[cos_a, -sin_a], [sin_a, cos_a]], dtype=np.float32)
         pts = (local @ rot.T) + np.array([cx, cy], dtype=np.float32)
@@ -413,7 +348,6 @@ class OverheadPerception:
 
     @staticmethod
     def _preprocess_for_aruco(gray: np.ndarray) -> np.ndarray:
-        """CLAHE + unsharp mask para recuperar esquinas borrosas."""
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         gray = clahe.apply(gray)
         blurred = cv2.GaussianBlur(gray, (0, 0), 3)
@@ -425,10 +359,11 @@ class OverheadPerception:
             return mask
         return cv2.resize(mask, (full_w, full_h), interpolation=cv2.INTER_NEAREST)
 
+    # ── Semantic layers ───────────────────────────────────────────────────────
+
     def extract_semantic_layers(self, warped_frame: np.ndarray
                                  ) -> Dict[str, np.ndarray]:
         full_h, full_w = warped_frame.shape[:2]
-
         proc_w = int(full_w * PROC_SCALE)
         proc_h = int(full_h * PROC_SCALE)
         small  = cv2.resize(warped_frame, (proc_w, proc_h),
@@ -445,17 +380,30 @@ class OverheadPerception:
 
         layers: Dict[str, np.ndarray] = {}
 
-        # ── Rangos de color ───────────────────────────────────────────────────
+        # ── Color ranges (v8) ─────────────────────────────────────────────────
+        # Two-band strategy per color: STRICT (high S, narrow hue) catches
+        # saturated cubes; LOOSE (lower S, wider hue) catches faded tape.
+        # The fused mask is then classified by center-fill: solid -> cube,
+        # gapped -> zone.
         color_ranges = {
             'cube_red': [
-                (np.array([0,   60,  40]), np.array([20,  255, 255])),
-                (np.array([155, 60,  40]), np.array([180, 255, 255])),
+                # Strict band 1: red wraps around 0
+                (np.array([0,    90,  60]), np.array([10,  255, 255])),
+                # Strict band 2: red wraps around 180
+                (np.array([170,  90,  60]), np.array([180, 255, 255])),
+                # Loose band for tape: lower S, wider hue, raised V to avoid shadows
+                (np.array([0,    40,  70]), np.array([15,  255, 255])),
+                (np.array([160,  40,  70]), np.array([180, 255, 255])),
             ],
             'cube_green': [
-                (np.array([25,  60,  50]), np.array([95,  255, 255])),
+                # Strict cubes: extends down to H=30 for yellow-green cubes
+                (np.array([30,   70,  50]), np.array([85,  255, 255])),
+                # Loose tape: lower S, narrower hue (avoid pure yellow)
+                (np.array([35,   30,  60]), np.array([85,  255, 255])),
             ],
             'cube_blue': [
-                (np.array([90,  60,  40]), np.array([130, 255, 255])),
+                # Deep navy only. Tight hue, high S, low V cap.
+                (np.array([100,  90,  30]), np.array([130, 255, 200])),
             ],
         }
 
@@ -463,22 +411,33 @@ class OverheadPerception:
         raw_color_masks: Dict[str, np.ndarray] = {}
 
         k_ex = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        k_erode_temporal = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+
         for name, ranges in color_ranges.items():
             combined = np.zeros((fh, fw), dtype=np.uint8)
             for lo, hi in ranges:
                 combined = cv2.bitwise_or(combined, cv2.inRange(hsv, lo, hi))
+
+            # ── Temporal smoothing ────────────────────────────────────────────
+            # OR with previous frame; store eroded version so stale detections
+            # shrink and die if not refreshed.
+            prev = self._prev_color_masks.get(name)
+            if prev is not None and prev.shape == combined.shape:
+                combined = cv2.bitwise_or(combined, prev)
+            self._prev_color_masks[name] = cv2.erode(combined, k_erode_temporal)
+
             dilated_color = cv2.dilate(combined, k_ex)
             all_colors_mask = cv2.bitwise_or(all_colors_mask, dilated_color)
             raw_color_masks[name] = combined
 
-        # ── Obstáculos negros ─────────────────────────────────────────────────
+        # ── Robot exclusion (kill detections under Claudio) ──────────────────
         robot_excl = self._robot_exclusion_mask(gray.shape)
-        # Exclude robot vicinity from color detections
         if robot_excl is not None:
             for name in raw_color_masks:
                 raw_color_masks[name] = cv2.bitwise_and(
                     raw_color_masks[name], cv2.bitwise_not(robot_excl))
 
+        # ── Black obstacles ──────────────────────────────────────────────────
         _, thresh_black = cv2.threshold(gray, BLACK_THRESHOLD, 255,
                                         cv2.THRESH_BINARY_INV)
         thresh_black = cv2.bitwise_and(thresh_black,
@@ -518,9 +477,9 @@ class OverheadPerception:
             dilated = cv2.bitwise_and(dilated, cv2.bitwise_not(robot_excl))
         layers['obstacles'] = self._upscale(dilated, full_h, full_w)
 
-        # ── Cubos y zonas dropoff ─────────────────────────────────────────────
-        k_morph  = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        k_fuse   = cv2.getStructuringElement(cv2.MORPH_RECT,    (15, 15))
+        # ── Cubes and drop zones ─────────────────────────────────────────────
+        k_morph = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        k_fuse  = cv2.getStructuringElement(cv2.MORPH_RECT,    (15, 15))
 
         target_area_px = (15.0 * self.px_per_cm * PROC_SCALE) ** 2
         min_area       = target_area_px * 0.10
@@ -530,6 +489,7 @@ class OverheadPerception:
             combined = cv2.morphologyEx(combined, cv2.MORPH_OPEN,  k_morph)
             combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, k_morph)
 
+            # Fuse adjacent pixels so striped zones become a single blob
             fused = cv2.dilate(combined, k_fuse)
             fused = cv2.morphologyEx(fused, cv2.MORPH_CLOSE, k_fuse)
 
@@ -549,20 +509,34 @@ class OverheadPerception:
                 ys_roi, xs_roi = np.where(roi > 0)
                 if len(xs_roi) == 0:
                     continue
-                color_px = float(len(xs_roi))
 
                 tight_w = int(xs_roi.max() - xs_roi.min() + 1)
                 tight_h = int(ys_roi.max() - ys_roi.min() + 1)
-                tight_bbox_area = float(tight_w * tight_h)
-                if tight_bbox_area == 0:
+                if tight_w < 3 or tight_h < 3:
                     continue
 
-                fill = color_px / tight_bbox_area
+                # ── Center-fill discriminator (NEW v8) ───────────────────────
+                # Cubes are solid in the middle. Zones (striped tape or
+                # hollow outlines) have visible gaps near the center.
+                cx_roi = (int(xs_roi.min()) + int(xs_roi.max())) // 2
+                cy_roi = (int(ys_roi.min()) + int(ys_roi.max())) // 2
+                win = max(3, min(tight_w, tight_h) // 4)  # 25% of smaller side
+                y0 = max(0, cy_roi - win); y1 = min(roi.shape[0], cy_roi + win + 1)
+                x0 = max(0, cx_roi - win); x1 = min(roi.shape[1], cx_roi + win + 1)
+                center_patch = roi[y0:y1, x0:x1]
+                if center_patch.size == 0:
+                    continue
+                center_fill = float(np.count_nonzero(center_patch)) / center_patch.size
 
-                if fill > 0.65:
+                # Classification:
+                #   center_fill > 0.85  -> dense middle = SOLID CUBE
+                #   center_fill < 0.70 + sufficient bbox area = ZONE
+                #   in between           = ambiguous, discard
+                if center_fill > 0.85:
                     cv2.rectangle(solid, (x, y), (x+w, y+h), 255, -1)
-                elif 0.10 <= fill <= 0.55:
+                elif center_fill < 0.70 and bbox_area > target_area_px * 0.25:
                     cv2.rectangle(zone, (x, y), (x+w, y+h), 255, -1)
+                # else: ambiguous fill, discard to avoid false positives
 
             layers[f'{name}_solid'] = self._upscale(solid, full_h, full_w)
             layers[f'{name}_zone']  = self._upscale(zone,  full_h, full_w)
